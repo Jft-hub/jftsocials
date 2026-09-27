@@ -1,0 +1,239 @@
+/**
+ * 5sim.net Virtual Numbers (SMS Activation) API Client
+ * Upstream URL: https://5sim.net/v1
+ */
+
+export interface FiveSimOrder {
+  id: number;
+  phone: string;
+  operator: string;
+  product: string;
+  price: number;
+  status: 'PENDING' | 'RECEIVED' | 'CANCELED' | 'TIMEOUT' | 'FINISHED' | 'BANNED';
+  expires: string;
+  sms: Array<{ created_at: string; date: string; sender: string; text: string; code: string }>;
+  created_at: string;
+  country?: string;
+}
+
+export class FiveSimClient {
+  private apiKey: string;
+  private apiUrl: string = 'https://5sim.net/v1';
+  private authSuspended: boolean = false;
+  private lastAuthError?: string;
+
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || process.env.FIVESIM_API_KEY || '';
+  }
+
+  public setApiKey(key: string) {
+    this.apiKey = key;
+    this.authSuspended = false;
+    this.lastAuthError = undefined;
+  }
+
+  public isLive(): boolean {
+    if (!this.apiKey) return false;
+    const clean = this.apiKey.trim().toLowerCase();
+    if (clean.length <= 10) return false;
+    if (
+      clean.startsWith('demo_') ||
+      clean.startsWith('mock_') ||
+      clean.startsWith('test_') ||
+      clean.includes('test') ||
+      clean.includes('placeholder') ||
+      clean.includes('dummy') ||
+      clean.includes('example') ||
+      clean.includes('sample')
+    ) {
+      return false;
+    }
+    return !this.authSuspended;
+  }
+
+  private async request<T>(path: string): Promise<T> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(`${this.apiUrl}${path}`, {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Accept: 'application/json',
+          'User-Agent': 'JFT-Socials-Enterprise/2.0 (+https://jftsocials.online)'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          this.authSuspended = true;
+          this.lastAuthError = `5sim API authentication rejected (HTTP ${response.status}). Operating in simulated sandbox mode until a valid API key is saved.`;
+          console.info(`[FiveSimClient] ${this.lastAuthError}`);
+        }
+        const text = await response.text().catch(() => '');
+        throw new Error(`5sim API error (${response.status}): ${text || response.statusText}`);
+      }
+      return (await response.json()) as T;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      throw new Error(`5sim request failed: ${err.message || err}`);
+    }
+  }
+
+  public async getBalance(): Promise<{ balance: number }> {
+    if (!this.isLive()) {
+      return { balance: 0 };
+    }
+    const profile = await this.request<{ balance: number }>('/user/profile');
+    return { balance: profile.balance };
+  }
+
+  // country="any" and operator="any" are valid, per the docs
+  public async getProducts(
+    country: string,
+    operator: string = 'any'
+  ): Promise<Record<string, { Category: string; Qty: number; Price: number }>> {
+    try {
+      const res = await fetch(`${this.apiUrl}/guest/products/${encodeURIComponent(country)}/${encodeURIComponent(operator)}`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (res.ok) {
+        return (await res.json()) as Record<string, { Category: string; Qty: number; Price: number }>;
+      }
+    } catch {
+      // Fallback
+    }
+
+    // Default institutional mock product catalog if upstream guest API is unreachable
+    return {
+      whatsapp: { Category: 'activation', Qty: 420, Price: 18.5 },
+      telegram: { Category: 'activation', Qty: 680, Price: 15.0 },
+      instagram: { Category: 'activation', Qty: 210, Price: 10.0 },
+      facebook: { Category: 'activation', Qty: 350, Price: 12.0 },
+      google: { Category: 'activation', Qty: 190, Price: 22.0 },
+      tiktok: { Category: 'activation', Qty: 310, Price: 14.5 },
+      twitter: { Category: 'activation', Qty: 150, Price: 16.0 },
+      openai: { Category: 'activation', Qty: 95, Price: 30.0 }
+    };
+  }
+
+  public async getCountries(): Promise<Record<string, any>> {
+    try {
+      const res = await fetch(`${this.apiUrl}/guest/countries`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (res.ok) {
+        return (await res.json()) as Record<string, any>;
+      }
+    } catch {
+      // Fallback
+    }
+
+    return {
+      nigeria: { text: 'Nigeria', prefix: '+234', iso: 'NG' },
+      usa: { text: 'United States', prefix: '+1', iso: 'US' },
+      unitedkingdom: { text: 'United Kingdom', prefix: '+44', iso: 'GB' },
+      kenya: { text: 'Kenya', prefix: '+254', iso: 'KE' },
+      ghana: { text: 'Ghana', prefix: '+233', iso: 'GH' },
+      southafrica: { text: 'South Africa', prefix: '+27', iso: 'ZA' },
+      canada: { text: 'Canada', prefix: '+1', iso: 'CA' },
+      germany: { text: 'Germany', prefix: '+49', iso: 'DE' },
+      france: { text: 'France', prefix: '+33', iso: 'FR' },
+      india: { text: 'India', prefix: '+91', iso: 'IN' }
+    };
+  }
+
+  public async buyActivation(country: string, operator: string, product: string): Promise<FiveSimOrder> {
+    if (!this.isLive()) {
+      // Mock activation for testing/demo
+      const mockId = Math.floor(1000000 + Math.random() * 9000000);
+      const prefix = country === 'nigeria' ? '+23480' : country === 'usa' ? '+1415' : '+4479';
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      return {
+        id: mockId,
+        phone: `${prefix}${randomDigits}`,
+        operator: operator || 'any',
+        product,
+        price: 15.0,
+        status: 'PENDING',
+        expires: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        sms: [],
+        created_at: new Date().toISOString(),
+        country
+      };
+    }
+    return this.request(`/user/buy/activation/${encodeURIComponent(country)}/${encodeURIComponent(operator)}/${encodeURIComponent(product)}`);
+  }
+
+  public async checkOrder(id: number | string): Promise<FiveSimOrder> {
+    if (!this.isLive()) {
+      // Return synthetic check order
+      return {
+        id: Number(id),
+        phone: '+2348012345678',
+        operator: 'any',
+        product: 'whatsapp',
+        price: 15.0,
+        status: 'PENDING',
+        expires: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        sms: [],
+        created_at: new Date().toISOString()
+      };
+    }
+    return this.request(`/user/check/${id}`);
+  }
+
+  public async finishOrder(id: number | string): Promise<FiveSimOrder> {
+    if (!this.isLive()) {
+      return {
+        id: Number(id),
+        phone: '+2348012345678',
+        operator: 'any',
+        product: 'whatsapp',
+        price: 15.0,
+        status: 'FINISHED',
+        expires: new Date().toISOString(),
+        sms: [],
+        created_at: new Date().toISOString()
+      };
+    }
+    return this.request(`/user/finish/${id}`);
+  }
+
+  public async cancelOrder(id: number | string): Promise<FiveSimOrder> {
+    if (!this.isLive()) {
+      return {
+        id: Number(id),
+        phone: '+2348012345678',
+        operator: 'any',
+        product: 'whatsapp',
+        price: 15.0,
+        status: 'CANCELED',
+        expires: new Date().toISOString(),
+        sms: [],
+        created_at: new Date().toISOString()
+      };
+    }
+    return this.request(`/user/cancel/${id}`);
+  }
+
+  public async banOrder(id: number | string): Promise<FiveSimOrder> {
+    if (!this.isLive()) {
+      return {
+        id: Number(id),
+        phone: '+2348012345678',
+        operator: 'any',
+        product: 'whatsapp',
+        price: 15.0,
+        status: 'BANNED',
+        expires: new Date().toISOString(),
+        sms: [],
+        created_at: new Date().toISOString()
+      };
+    }
+    return this.request(`/user/ban/${id}`);
+  }
+}

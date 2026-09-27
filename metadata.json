@@ -1,0 +1,8 @@
+{
+  "name": "JFT Socials",
+  "description": "Futuristic social media growth and digital asset platform with real-time order tracking, virtual numbers, pre-made account store, multi-currency wallet, and intelligent pricing engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
