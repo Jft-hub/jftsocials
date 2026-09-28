@@ -64,12 +64,24 @@ export const AdminUsersView: React.FC = () => {
     if (!token) return;
     if (!window.confirm(`PERMANENTLY delete ${email}?\n\nWallets, ledger, tickets and notifications are removed. Past orders stay in the books anonymized. This cannot be undone.`)) return;
     if (!window.confirm(`Final confirmation: erase ${email} completely?`)) return;
-    try {
+    const attemptDelete = async (force: boolean) => {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ force })
       });
-      const data = await res.json();
+      return res.json();
+    };
+    try {
+      let data = await attemptDelete(false);
+      if (!data.success && data.non_zero_balance) {
+        const amount = Number(data.non_zero_balance).toLocaleString();
+        if (!window.confirm(`${email} still holds ${amount} across wallets.\n\nDeleting now FORFEITS that money forever (it vanishes, nobody receives it).\n\nForfeit and delete anyway?`)) return;
+        data = await attemptDelete(true);
+      }
       if (data.success) {
         showToast('User permanently deleted.', 'success');
         fetchUsers();
