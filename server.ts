@@ -559,6 +559,7 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
     const providerClient = getProviderClient(targetProviderId);
     let providerOrderId: number | string = 0;
     let dispatchFailed = false;
+    let finalProviderId = targetProviderId;
 
     let providerServiceId = service.provider_service_id;
     if (!providerServiceId) {
@@ -606,6 +607,7 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
             console.log(`[OrderCreation] Engainsmedia failover response for ${orderId}:`, fallbackRes);
             if (fallbackRes && fallbackRes.orderId) {
               providerOrderId = fallbackRes.orderId;
+              finalProviderId = 'eagainsmedia';
               dispatchFailed = false;
               console.log(`[OrderCreation] Failover to Engainsmedia SUCCESS: Remote Order ID #${providerOrderId}`);
             }
@@ -613,6 +615,39 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
         }
       } catch (err: any) {
         console.warn(`[OrderCreation] Failover attempt to Engainsmedia error:`, err.message);
+      }
+    }
+
+    // Reverse failover: If Engainsmedia rejects (e.g. "Missing username"),
+    // try the closest Peakerr equivalent in the same category before parking
+    // the order as processing.
+    if (dispatchFailed && targetProviderId === 'eagainsmedia') {
+      try {
+        const peakerrClient = getProviderClient('peakerr');
+        if (peakerrClient && peakerrClient.isLive()) {
+          const peakerrService = db.getServices(true).find(s =>
+            (s.provider_id === 'peakerr' || s.id.includes('peakerr')) &&
+            s.category_id === service.category_id &&
+            /view/i.test(s.name) === /view/i.test(service.name)
+          );
+          if (peakerrService && peakerrService.provider_service_id) {
+            console.log(`[OrderCreation] Reverse failover: Routing order ${orderId} to Peakerr (Service #${peakerrService.provider_service_id})...`);
+            const fallbackRes = await peakerrClient.addOrder(
+              peakerrService.provider_service_id,
+              target_link,
+              numQuantity
+            );
+            console.log(`[OrderCreation] Peakerr failover response for ${orderId}:`, fallbackRes);
+            if (fallbackRes && fallbackRes.orderId) {
+              providerOrderId = fallbackRes.orderId;
+              finalProviderId = 'peakerr';
+              dispatchFailed = false;
+              console.log(`[OrderCreation] Failover to Peakerr SUCCESS: Remote Order ID #${providerOrderId}`);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[OrderCreation] Failover attempt to Peakerr error:`, err.message);
       }
     }
 
@@ -625,7 +660,7 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
       user_email: user.email,
       service_id: service.id,
       service_name: service.name,
-      provider_id: targetProviderId,
+      provider_id: finalProviderId,
       provider_service_id: service.provider_service_id,
       provider_order_id: providerOrderId || undefined,
       target_link,
@@ -1628,6 +1663,40 @@ app.patch('/api/admin/users/:id', verifyAdmin, (req: AuthenticatedRequest, res) 
     entity_type: 'user',
     entity_id: updated.id,
     details: `Updated user ${updated.email} status to ${status || 'unchanged'}, role to ${role || 'unchanged'}`,
+    ip: req.ip || '127.0.0.1'
+  });
+
+  res.json({ success: true, user: updated });
+});
+
+// Role change endpoint used by the admin Users panel (POST .../users/:id/role).
+app.post('/api/admin/users/:id/role', verifyAdmin, (req: AuthenticatedRequest, res) => {
+  const admin = req.user!;
+  const { role } = req.body;
+
+  if (!role || !['customer', 'support', 'manager', 'admin', 'superadmin'].includes(role)) {
+    return res.status(400).json({ success: false, error: 'Valid role is required.' });
+  }
+
+  // Nobody can demote themselves out of the admin chair (lockout prevention).
+  if (req.params.id === admin.id && !['admin', 'superadmin', 'manager'].includes(role)) {
+    return res.status(400).json({ success: false, error: 'You cannot remove your own admin access.' });
+  }
+
+  const updated = db.updateUser(req.params.id, { role });
+
+  if (!updated) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  db.addAuditLog({
+    actor_id: admin.id,
+    actor_name: admin.name,
+    actor_role: admin.role,
+    action: 'UPDATE_USER_ROLE',
+    entity_type: 'user',
+    entity_id: updated.id,
+    details: `Changed role of ${updated.email} to ${role}`,
     ip: req.ip || '127.0.0.1'
   });
 

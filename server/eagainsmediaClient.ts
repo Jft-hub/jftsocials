@@ -133,6 +133,26 @@ export class EagainsmediaClient implements ServiceProvider {
     }
   }
 
+  // Best-effort handle extraction for providers that demand a `username`
+  // field (e.g. "@user", "username", or the last path segment of a URL).
+  private extractUsername(link: string): string {
+    const t = (link || '').trim();
+    if (!t) return '';
+    if (t.startsWith('@')) return t.slice(1).split(/[/?\s#]/)[0];
+    if (!/^https?:\/\//i.test(t) && !t.includes(' ') && !t.includes('/')) {
+      return t.replace(/^@/, '');
+    }
+    try {
+      const u = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+      const segs = u.pathname.split('/').filter(Boolean);
+      let cand = segs.length > 0 ? segs[segs.length - 1] : '';
+      if (cand.startsWith('@')) cand = cand.slice(1);
+      return cand.split(/[?#]/)[0];
+    } catch {
+      return '';
+    }
+  }
+
   public async addOrder(
     service: number | string,
     link: string,
@@ -169,6 +189,31 @@ export class EagainsmediaClient implements ServiceProvider {
           console.warn('[EagainsmediaClient] Provider balance empty. Falling back to sandbox simulation so customer order executes cleanly.');
           const simulatedId = Math.floor(1000000 + Math.random() * 900000);
           return { orderId: simulatedId };
+        }
+        // Some Engainsmedia services reject a bare link with "Missing username".
+        // Retry once with an explicit username field before giving up.
+        if (errLower.includes('username')) {
+          const username = this.extractUsername(link);
+          if (username) {
+            console.log(`[EagainsmediaClient] Retrying with username field: service=${cleanService}, username=${username}`);
+            try {
+              const retryRes = await this.request<{ order?: number; error?: string }>({
+                action: 'add',
+                service: cleanService,
+                link,
+                username,
+                quantity
+              });
+              if (retryRes && retryRes.order) {
+                console.log(`[EagainsmediaClient] Order accepted on username retry. Remote Order ID: ${retryRes.order}`);
+                return { orderId: retryRes.order };
+              }
+              console.warn(`[EagainsmediaClient] Username retry also rejected: ${retryRes?.error || 'unknown'}`);
+              return { orderId: 0, error: retryRes?.error || res.error };
+            } catch (retryErr: any) {
+              console.warn('[EagainsmediaClient] Username retry threw:', retryErr.message || retryErr);
+            }
+          }
         }
         return { orderId: 0, error: res.error };
       }
