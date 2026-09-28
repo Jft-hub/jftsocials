@@ -190,7 +190,7 @@ export const CustomerDashboard: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold font-display text-white">Recent Orders</h2>
-            <p className="text-xs text-slate-400">Autonomous status tracking from Peakerr v2 network</p>
+            <p className="text-xs text-slate-400">Autonomous status tracking from P network</p>
           </div>
 
           <div className="flex items-center gap-2">

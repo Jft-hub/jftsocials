@@ -11,7 +11,7 @@ export const Onboarding3DModal: React.FC = () => {
   const steps = [
     {
       title: 'Institutional Social Media Pipeline',
-      subtitle: 'Powered by Peakerr API v2 Engine',
+      subtitle: 'Powered by P Engine',
       description:
         'Access premium tier follower pools, high-retention video views, and algorithm engagement across Instagram, TikTok, YouTube, Telegram, and X with instantaneous delivery.',
       icon: Zap,

@@ -48,7 +48,7 @@ export const AdminDashboard: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || 'Synced active orders with Peakerr.', 'success');
+        showToast(data.message || 'Synced active orders with P.', 'success');
         await fetchStats();
       } else {
         showToast(data.error || 'Sync failed.', 'error');
@@ -85,7 +85,7 @@ export const AdminDashboard: React.FC = () => {
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
           >
             <RotateCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : 'text-cyan-400'}`} />
-            <span>{syncing ? 'Syncing...' : 'Sync Peakerr Nodes'}</span>
+            <span>{syncing ? 'Syncing...' : 'Sync Nodes'}</span>
           </button>
 
           <button
@@ -179,7 +179,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Upstream Provider Balances & Pipeline */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
-          <div className="text-xs text-slate-400">Peakerr Balance</div>
+          <div className="text-xs text-slate-400">P Balance</div>
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.provider_balance === null || stats?.provider_balance === undefined
               ? <span className="text-slate-500">—</span>
@@ -190,7 +190,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
-          <div className="text-xs text-slate-400">Engainsmedia Balance</div>
+          <div className="text-xs text-slate-400">E Balance</div>
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.eagainsmedia_balance === null || stats?.eagainsmedia_balance === undefined
               ? <span className="text-slate-500">—</span>
@@ -201,7 +201,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
-          <div className="text-xs text-slate-400">5sim Balance</div>
+          <div className="text-xs text-slate-400">5 Balance</div>
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.fivesim_balance === null || stats?.fivesim_balance === undefined
               ? <span className="text-slate-500">—</span>

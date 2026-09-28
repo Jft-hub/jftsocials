@@ -747,7 +747,7 @@ export const NewOrderView: React.FC = () => {
               <span>Fulfillment & Refill Safeguard</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Orders are transmitted via encrypted API streams directly to Peakerr. If the upstream provider experiences drops on refill-eligible packages, click Refill on your Orders dashboard.
+              Orders are transmitted via encrypted API streams directly to P. If the upstream provider experiences drops on refill-eligible packages, click Refill on your Orders dashboard.
             </p>
           </div>
         </div>

@@ -188,7 +188,7 @@ export const AdminOrdersView: React.FC = () => {
                       <td className="py-3.5 px-3 font-mono font-bold text-white whitespace-nowrap">
                         {order.id}
                         <div className="text-[10px] text-slate-400 font-normal">
-                          Peakerr ID: {order.provider_order_id || 'N/A'}
+                          Provider ID: {order.provider_order_id || 'N/A'}
                         </div>
                       </td>
 
@@ -317,7 +317,7 @@ export const AdminOrdersView: React.FC = () => {
                 <textarea
                   required
                   rows={3}
-                  placeholder="e.g. Upstream Peakerr drop verified on link; refunded per WhatsApp inquiry"
+                  placeholder="e.g. Upstream drop verified on link; refunded per WhatsApp inquiry"
                   value={refundReason}
                   onChange={e => setRefundReason(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"

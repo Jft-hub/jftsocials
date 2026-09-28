@@ -173,7 +173,7 @@ export const AdminSettingsView: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold font-display text-white">System Settings & Upstream Providers</h1>
         <p className="text-xs text-slate-400 mt-1">
-          Configure Peakerr SMM, Eagainsmedia SMM, 5sim Virtual Numbers, deposit limits, and support routing.
+          Configure P SMM, E SMM, 5 Virtual Numbers, deposit limits, and support routing.
         </p>
       </div>
 
@@ -249,7 +249,7 @@ export const AdminSettingsView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Server className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-sm font-bold font-display text-white">Peakerr Provider Node (Primary SMM)</h2>
+              <h2 className="text-sm font-bold font-display text-white">P Provider Node (Primary SMM)</h2>
               {peakerrConfigured && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 text-[10px] font-bold">
                   Key Encrypted & Active
@@ -264,7 +264,7 @@ export const AdminSettingsView: React.FC = () => {
               className="px-3 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-700/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <Zap className={`w-3.5 h-3.5 ${testingProvider === 'peakerr' ? 'animate-spin' : ''}`} />
-              <span>Test Peakerr Connection</span>
+              <span>Test P Connection</span>
             </button>
           </div>
 
@@ -278,7 +278,7 @@ export const AdminSettingsView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Peakerr API Endpoint URL
+                P API Endpoint URL
               </label>
               <input
                 type="text"
@@ -291,11 +291,11 @@ export const AdminSettingsView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Peakerr API Key {peakerrConfigured && '(leave blank to keep current encrypted key)'}
+                P API Key {peakerrConfigured && '(leave blank to keep current encrypted key)'}
               </label>
               <input
                 type="password"
-                placeholder={peakerrConfigured ? '••••••••••••••••••••••••' : 'Enter Peakerr API key'}
+                placeholder={peakerrConfigured ? '••••••••••••••••••••••••' : 'Enter P API key'}
                 value={peakerrApiKey}
                 onChange={e => setPeakerrApiKey(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
@@ -309,7 +309,7 @@ export const AdminSettingsView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Server className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-bold font-display text-white">Eagainsmedia Provider Node (Secondary SMM)</h2>
+              <h2 className="text-sm font-bold font-display text-white">E Provider Node (Secondary SMM)</h2>
               {eagainsmediaConfigured && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 text-[10px] font-bold">
                   Key Encrypted & Active
@@ -324,7 +324,7 @@ export const AdminSettingsView: React.FC = () => {
               className="px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-700/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <Zap className={`w-3.5 h-3.5 ${testingProvider === 'eagainsmedia' ? 'animate-spin' : ''}`} />
-              <span>Test Eagainsmedia Connection</span>
+              <span>Test E Connection</span>
             </button>
           </div>
 
@@ -338,7 +338,7 @@ export const AdminSettingsView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Eagainsmedia API Endpoint URL
+                E API Endpoint URL
               </label>
               <input
                 type="text"
@@ -351,11 +351,11 @@ export const AdminSettingsView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Eagainsmedia API Key {eagainsmediaConfigured && '(leave blank to keep current key)'}
+                E API Key {eagainsmediaConfigured && '(leave blank to keep current key)'}
               </label>
               <input
                 type="password"
-                placeholder={eagainsmediaConfigured ? '••••••••••••••••••••••••' : 'Enter Eagainsmedia API key'}
+                placeholder={eagainsmediaConfigured ? '••••••••••••••••••••••••' : 'Enter E API key'}
                 value={eagainsmediaApiKey}
                 onChange={e => setEagainsmediaApiKey(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
@@ -369,7 +369,7 @@ export const AdminSettingsView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <PhoneCall className="w-4 h-4 text-purple-400" />
-              <h2 className="text-sm font-bold font-display text-white">5sim.net Virtual Numbers & OTP Engine</h2>
+              <h2 className="text-sm font-bold font-display text-white">5 Virtual Numbers & OTP Engine</h2>
               {fivesimConfigured && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 text-[10px] font-bold">
                   Key Encrypted & Active
@@ -384,7 +384,7 @@ export const AdminSettingsView: React.FC = () => {
               className="px-3 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-900/60 text-purple-300 border border-purple-700/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <Zap className={`w-3.5 h-3.5 ${testingProvider === 'fivesim' ? 'animate-spin' : ''}`} />
-              <span>Test 5sim Connection</span>
+              <span>Test 5 Connection</span>
             </button>
           </div>
 
@@ -398,11 +398,11 @@ export const AdminSettingsView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                5sim API Token (Bearer Token) {fivesimConfigured && '(leave blank to keep current encrypted token)'}
+                5 API Token (Bearer Token) {fivesimConfigured && '(leave blank to keep current encrypted token)'}
               </label>
               <input
                 type="password"
-                placeholder={fivesimConfigured ? '••••••••••••••••••••••••' : 'Enter 5sim API token'}
+                placeholder={fivesimConfigured ? '••••••••••••••••••••••••' : 'Enter 5 API token'}
                 value={fivesimApiKey}
                 onChange={e => setFivesimApiKey(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
@@ -411,7 +411,7 @@ export const AdminSettingsView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                5sim Unit Exchange Rate to NGN (₦ per unit)
+                5 Unit Exchange Rate to NGN (₦ per unit)
               </label>
               <input
                 type="number"
@@ -421,7 +421,7 @@ export const AdminSettingsView: React.FC = () => {
                 onChange={e => setFivesimNgnRate(Number(e.target.value))}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Converts 5sim native currency units to Nigerian Naira.</p>
+              <p className="text-[10px] text-slate-500 mt-1">Converts 5 native currency units to Nigerian Naira.</p>
             </div>
 
             <div>

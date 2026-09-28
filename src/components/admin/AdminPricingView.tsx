@@ -253,7 +253,7 @@ export const AdminPricingView: React.FC = () => {
                 onChange={e => setMarkupPercent(Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
               />
-              <p className="text-[11px] text-slate-400 mt-1">Default is 50% above Peakerr costs.</p>
+              <p className="text-[11px] text-slate-400 mt-1">Default is 20% above P costs.</p>
             </div>
 
             <div>

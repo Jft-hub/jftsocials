@@ -363,7 +363,7 @@ export const VirtualNumbersView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider">
             <PhoneCall className="w-4 h-4" />
-            <span>5sim.net Automated OTP Engine</span>
+            <span>5 Automated OTP Engine</span>
           </div>
           <h1 className="text-2xl font-bold font-display text-white mt-1">Virtual Numbers for SMS Verification</h1>
           <p className="text-xs text-slate-400 mt-1">

@@ -140,14 +140,14 @@ export const AdminServicesView: React.FC = () => {
             disabled={syncing}
             className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition cursor-pointer"
           >
-            Peakerr
+            P
           </button>
           <button
             onClick={() => handleSyncServices('eagainsmedia')}
             disabled={syncing}
             className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition cursor-pointer"
           >
-            Eagainsmedia
+            E
           </button>
         </div>
       </div>

@@ -91,7 +91,7 @@ export const LandingPage: React.FC = () => {
 
               <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
                 Empowering brands, creators, and agencies with institutional-grade social media acceleration.
-                Direct Peakerr v2 API fulfillment, real-time order tracking, and dual NGN & USDT settlement.
+                Direct P API fulfillment, real-time order tracking, and dual NGN & USDT settlement.
               </p>
 
               {/* Action Buttons */}
@@ -147,7 +147,7 @@ export const LandingPage: React.FC = () => {
                 <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800/80 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-slate-300 font-mono">Live Node: peakerr.com/v2</span>
+                    <span className="text-slate-300 font-mono">Live Node: P network</span>
                   </div>
                   <span className="text-cyan-400 font-semibold">Interactive 3D</span>
                 </div>
@@ -170,7 +170,7 @@ export const LandingPage: React.FC = () => {
               <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
                 <Zap className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-bold text-white font-display">Automated Peakerr Pipeline</h3>
+              <h3 className="text-lg font-bold text-white font-display">Automated P Pipeline</h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                 Direct upstream node synchronization handles high-volume requests with zero manual delay. Refill guarantees and live counters synchronized continuously.
               </p>
@@ -436,7 +436,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-900">
             <p>© {new Date().getFullYear()} JFT Socials (jftsocials.online). All rights reserved.</p>
             <p className="text-[11px] text-slate-500">
-              Peakerr API v2 Integration • Direct WhatsApp Support: +2347018409997
+              P API Integration • Direct WhatsApp Support: +2347018409997
             </p>
           </div>
         </div>
@@ -468,7 +468,7 @@ export const LandingPage: React.FC = () => {
                     <strong>2. Investigation Flow:</strong> Customers experiencing order delays, partial delivery, or drops must submit a Support Ticket or contact our verified WhatsApp agent at <strong>+2347018409997</strong>.
                   </p>
                   <p>
-                    <strong>3. Admin Resolution:</strong> A platform administrator reviews the upstream Peakerr order ID. If approved, the refund is credited directly to the customer's wallet balance in the original currency (NGN or USDT) and recorded in the double-entry transaction ledger.
+                    <strong>3. Admin Resolution:</strong> A platform administrator reviews the upstream P order ID. If approved, the refund is credited directly to the customer's wallet balance in the original currency (NGN or USDT) and recorded in the double-entry transaction ledger.
                   </p>
                 </>
               ) : legalModal === 'acceptable' ? (

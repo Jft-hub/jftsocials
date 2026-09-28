@@ -2595,14 +2595,14 @@ app.post('/api/admin/provider/test', verifyAdmin, async (req, res) => {
     const start = Date.now();
     let balance: any;
     let is_live = false;
-    let providerLabel = 'Peakerr API v2';
+    let providerLabel = 'P';
 
     if (providerName === 'eagainsmedia') {
-      providerLabel = 'Eagainsmedia SMM API';
+      providerLabel = 'E';
       is_live = eagainsmedia.isLive();
       balance = await eagainsmedia.getBalance();
     } else if (providerName === 'fivesim') {
-      providerLabel = '5sim.net API';
+      providerLabel = '5';
       is_live = fiveSim.isLive();
       balance = await fiveSim.getBalance();
     } else {
