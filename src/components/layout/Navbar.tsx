@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Zap,
   Bell,
@@ -41,6 +41,32 @@ export const Navbar: React.FC<{ onToggleSidebar?: () => void; isSidebarOpen?: bo
 
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Live platform status (booleans only - no balances leak to the client).
+  const [netStatus, setNetStatus] = useState<{ ordering_ok: boolean; any_live: boolean } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/public/status');
+        const data = await res.json();
+        if (!cancelled && data && data.success) {
+          setNetStatus({
+            ordering_ok: Boolean(data.ordering_ok),
+            any_live: Boolean(data.peakerr_live || data.eagainsmedia_live)
+          });
+        }
+      } catch {
+        // badge keeps its last known state
+      }
+    };
+    load();
+    const timer = setInterval(load, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   // Active wallet balance based on selected currency
   const activeWallet = wallets.find(w => w.currency === currency);
@@ -89,14 +115,16 @@ export const Navbar: React.FC<{ onToggleSidebar?: () => void; isSidebarOpen?: bo
           </div>
         </div>
 
-        {/* Center: Live Status Indicator */}
+        {/* Center: Live Status Indicator (real upstream state, no hardcoded claims) */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${netStatus && !netStatus.ordering_ok ? (netStatus.any_live ? 'bg-amber-400' : 'bg-rose-400') : 'bg-emerald-400'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${netStatus && !netStatus.ordering_ok ? (netStatus.any_live ? 'bg-amber-500' : 'bg-rose-500') : 'bg-emerald-500'}`}></span>
           </span>
-          <span className="font-medium text-slate-300">Peakerr v2 Node:</span>
-          <span className="text-emerald-400 font-semibold">100% Operational</span>
+          <span className="font-medium text-slate-300">Network:</span>
+          <span className={`font-semibold ${netStatus ? (netStatus.ordering_ok ? 'text-emerald-400' : netStatus.any_live ? 'text-amber-400' : 'text-rose-400') : 'text-slate-400'}`}>
+            {!netStatus ? 'Checking…' : netStatus.ordering_ok ? 'Operational' : netStatus.any_live ? 'Limited' : 'Offline'}
+          </span>
         </div>
 
         {/* Right Action Stack */}

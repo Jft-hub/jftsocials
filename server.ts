@@ -193,6 +193,33 @@ app.get('/api/public/config', (req, res) => {
   });
 });
 
+// Public liveness badge. Booleans only - balances and secrets never leave
+// the server here. Cached 60s so page loads don't hammer upstream APIs.
+let publicStatusCache: { at: number; data: any } | null = null;
+app.get('/api/public/status', async (req, res) => {
+  try {
+    if (publicStatusCache && Date.now() - publicStatusCache.at < 60 * 1000) {
+      return res.json({ success: true, ...publicStatusCache.data });
+    }
+    const peakerrLive = peakerr.isLive();
+    const eagainsLive = eagainsmedia.isLive();
+    let canDeliver = peakerrLive || eagainsLive;
+    try {
+      const [pb, eb] = await Promise.all([peakerr.getBalance(), eagainsmedia.getBalance()]);
+      const pOk = peakerrLive && !pb.error && pb.balance > 0;
+      const eOk = eagainsLive && !eb.error && eb.balance > 0;
+      canDeliver = pOk || eOk;
+    } catch {
+      // balance check failed - fall back to key validity
+    }
+    const data = { peakerr_live: peakerrLive, eagainsmedia_live: eagainsLive, ordering_ok: canDeliver };
+    publicStatusCache = { at: Date.now(), data };
+    res.json({ success: true, ...data });
+  } catch (err: any) {
+    res.json({ success: true, peakerr_live: false, eagainsmedia_live: false, ordering_ok: false });
+  }
+});
+
 // -----------------------------
 // AUTHENTICATION
 // -----------------------------
@@ -1732,7 +1759,9 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
         services_count: services.filter(s => s.active).length,
         provider_balance: providerBalance,
         provider_balance_currency: providerCurrency,
-        provider_is_live: peakerr.isLive()
+        provider_is_live: peakerr.isLive(),
+        min_margin_ngn: settings.default_min_margin_ngn,
+        default_markup_percentage: settings.default_markup_percentage
       }
     });
   } catch (err: any) {

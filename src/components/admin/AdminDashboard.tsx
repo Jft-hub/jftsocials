@@ -73,7 +73,7 @@ export const AdminDashboard: React.FC = () => {
             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
               Administrator Console
             </span>
-            <span className="text-xs text-slate-400">Node Status: Connected</span>
+            <span className="text-xs text-slate-400">Node Status: {stats ? (stats.provider_is_live ? 'Live' : 'Offline') : 'Checking…'}</span>
           </div>
           <h1 className="text-2xl font-bold font-display text-white mt-1">Platform Operations</h1>
         </div>
@@ -124,7 +124,7 @@ export const AdminDashboard: React.FC = () => {
             ₦{stats?.total_gross_profit_ngn?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
           </div>
           <div className="text-[11px] text-emerald-400 font-medium">
-            Strict ₦2,000 floor protected
+            ₦{(stats?.min_margin_ngn ?? 10).toLocaleString()} minimum margin floor enforced
           </div>
         </div>
 

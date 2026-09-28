@@ -368,7 +368,7 @@ export const LandingPage: React.FC = () => {
           {[
             {
               q: 'How does the platform pricing formula work?',
-              a: 'JFT Socials applies a percentage markup with a strict ₦2,000 minimum platform margin per individual transaction. For example, if provider cost is ₦1,000, 50% markup is ₦500, but our ₦2,000 floor increases the selling price to ₦3,000. If provider cost is ₦10,000, the 50% markup yields ₦15,000.'
+              a: 'JFT Socials applies a 20% markup with a ₦10 minimum platform margin per individual transaction. For example, if provider cost is ₦1,000, the 20% markup is ₦200, so the selling price is ₦1,200. If provider cost is ₦10,000, the 20% markup yields ₦12,000.'
             },
             {
               q: 'How does the Refund Policy work?',
@@ -376,7 +376,7 @@ export const LandingPage: React.FC = () => {
             },
             {
               q: 'Do I have to refresh the page to see order updates?',
-              a: 'No. JFT Socials features autonomous background polling. When you view your orders, active tasks refresh automatically every 8 seconds with start count and remaining units.'
+              a: 'No. JFT Socials features autonomous background polling. When you view your orders, active tasks refresh automatically with start count and remaining units.'
             },
             {
               q: 'What deposit methods are supported?',
