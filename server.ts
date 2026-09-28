@@ -594,6 +594,7 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
         if (engainsClient && engainsClient.isLive()) {
           const engService = db.getServices(true).find(s =>
             (s.provider_id === 'eagainsmedia' || s.id.includes('eagains')) &&
+            typeof s.provider_service_id === 'number' && s.provider_service_id >= 1000 &&
             s.category_id === service.category_id &&
             /view/i.test(s.name) === /view/i.test(service.name)
           );
@@ -627,6 +628,7 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
         if (peakerrClient && peakerrClient.isLive()) {
           const peakerrService = db.getServices(true).find(s =>
             (s.provider_id === 'peakerr' || s.id.includes('peakerr')) &&
+            typeof s.provider_service_id === 'number' && s.provider_service_id >= 1000 &&
             s.category_id === service.category_id &&
             /view/i.test(s.name) === /view/i.test(service.name)
           );

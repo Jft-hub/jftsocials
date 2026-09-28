@@ -3,7 +3,7 @@ import { Layers, Search, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react
 import { useApp } from '../../context/AppContext.js';
 
 export const ServicesView: React.FC = () => {
-  const { currency, setActiveView } = useApp();
+  const { currency, setActiveView, setOrderServicePreset } = useApp();
   const [services, setServices] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
@@ -161,7 +161,10 @@ export const ServicesView: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => setActiveView('new-order')}
+                  onClick={() => {
+                    setOrderServicePreset({ serviceId: service.id });
+                    setActiveView('new-order');
+                  }}
                   className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>Order Now</span>

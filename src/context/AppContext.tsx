@@ -21,6 +21,8 @@ interface AppContextType {
   toast: { msg: string; type: 'success' | 'error' | 'info' } | null;
   activeView: string;
   setActiveView: (view: string) => void;
+  orderServicePreset: { serviceId: string } | null;
+  setOrderServicePreset: (preset: { serviceId: string } | null) => void;
   isAdminMode: boolean;
   setIsAdminMode: (admin: boolean) => void;
   openAuthModal: (mode?: 'login' | 'register') => void;
@@ -42,6 +44,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [activeView, setActiveView] = useState<string>('landing');
+  // Service pre-selected from the catalog's "Order Now" button. Consumed once
+  // by the New Order form (which also clears it), so the exact chosen service
+  // is what lands in the order - never the cheapest-default fallback.
+  const [orderServicePreset, setOrderServicePreset] = useState<{ serviceId: string } | null>(null);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -236,6 +242,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toast,
         activeView,
         setActiveView,
+        orderServicePreset,
+        setOrderServicePreset,
         isAdminMode,
         setIsAdminMode,
         openAuthModal,

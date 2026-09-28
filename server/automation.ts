@@ -75,6 +75,12 @@ export class AutomationEngine {
   private static readonly MAX_DISPATCH_ATTEMPTS = 5;
   private static readonly DISPATCH_RETRY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between retries
 
+  // Consecutive status-check failures per order. Orders whose provider IDs are
+  // permanently rejected ("Incorrect order ID") back off exponentially instead
+  // of spamming the provider (and logs) every 15 seconds. In-memory only:
+  // a restart resumes normal polling. Success clears the entry.
+  private statusFailures = new Map<string, { fails: number; skipUntil: number }>();
+
   public async runOrderSync() {
     if (this.isSyncing) return;
     this.isSyncing = true;
@@ -95,10 +101,25 @@ export class AutomationEngine {
       // Check provider statuses
       for (const order of activeOrders.slice(0, 20)) {
         try {
-          if (!order.provider_order_id) continue;
+          if (!order.provider_order_id || String(order.provider_order_id) === '0') continue;
+
+          const backoff = this.statusFailures.get(order.id);
+          if (backoff && backoff.skipUntil > Date.now()) continue;
 
           const provider = this.getProvider(order.provider_id);
           const providerStatus = await provider.getOrderStatus(order.provider_order_id);
+
+          if (providerStatus && (providerStatus as any).error &&
+              String((providerStatus as any).error).toLowerCase().includes('ncorrect order id')) {
+            const fails = (backoff?.fails || 0) + 1;
+            const waitMs = Math.min(fails * 5 * 60 * 1000, 2 * 60 * 60 * 1000);
+            this.statusFailures.set(order.id, { fails, skipUntil: Date.now() + waitMs });
+            if (fails === 1 || fails % 10 === 0) {
+              console.warn(`[AutomationEngine] Order ${order.id}: provider rejects status checks (${fails}x) - backing off.`);
+            }
+            continue;
+          }
+          this.statusFailures.delete(order.id);
 
           if (providerStatus && !providerStatus.error) {
             let normalizedStatus: OrderStatus = order.status;

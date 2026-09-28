@@ -17,7 +17,7 @@ import { useApp } from '../../context/AppContext.js';
 import { Currency } from '../../types/index.js';
 
 export const NewOrderView: React.FC = () => {
-  const { token, currency, wallets, showToast, setActiveView, refreshOrders, refreshUserData } = useApp();
+  const { token, currency, wallets, showToast, setActiveView, refreshOrders, refreshUserData, orderServicePreset, setOrderServicePreset } = useApp();
 
   const [categories, setCategories] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -142,6 +142,24 @@ export const NewOrderView: React.FC = () => {
       setSelectedServiceId('');
     }
   }, [selectedCategoryType, selectedPlatform, services]);
+
+  // Honor the catalog's "Order Now" choice: jump to the exact service that was
+  // clicked (including its platform tab), then clear the preset. Runs after
+  // the catalog loads so the service is present before we select it.
+  useEffect(() => {
+    if (!orderServicePreset || services.length === 0) return;
+    const target = services.find(s => s.id === orderServicePreset.serviceId);
+    setOrderServicePreset(null);
+    if (!target) return;
+    const targetCategory = categories.find(c => c.id === target.category_id);
+    if (targetCategory && targetCategory.platform && targetCategory.platform !== selectedPlatform) {
+      setSelectedPlatform(targetCategory.platform);
+    }
+    setSelectedServiceId(target.id);
+    const minVal = target.min_quantity === 50 ? 10 : (target.min_quantity || 10);
+    setQuantity(minVal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderServicePreset, services]);
 
   const activeService = services.find(s => s.id === selectedServiceId);
   const effectiveMinQuantity = activeService ? (activeService.min_quantity === 50 ? 10 : (activeService.min_quantity || 10)) : 10;
