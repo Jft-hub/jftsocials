@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { X, Lock, Mail, User, ArrowRight, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext.js';
+import { LegalContent, LEGAL_TITLES, LegalKey } from '../common/LegalContent.js';
 
 export const AuthModal: React.FC = () => {
   const { authModalOpen, setAuthModalOpen, authMode, login, showToast } = useApp();
@@ -13,6 +14,7 @@ export const AuthModal: React.FC = () => {
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [legalView, setLegalView] = useState<LegalKey | null>(null);
 
   if (!authModalOpen) return null;
 
@@ -66,33 +68,9 @@ export const AuthModal: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = async (type: 'demo' | 'admin') => {
-    setLoading(true);
-    setErrorMsg('');
-    try {
-      const loginPayload =
-        type === 'admin'
-          ? { login: 'admin@jftsocials.online', password: 'AdminSecureKey2026!' }
-          : { login: 'customer@jftsocials.online', password: 'Password123!' };
-
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginPayload)
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        login(data.token, data.user);
-      } else {
-        setErrorMsg(data.error || 'Quick login failed.');
-      }
-    } catch (e: any) {
-      setErrorMsg(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // NOTE: one-click demo/admin logins were removed. A public "Admin Console"
+  // button with a hardcoded password is an open door to the money controls.
+  // Admins sign in with their own credentials like everyone else.
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -205,9 +183,9 @@ export const AuthModal: React.FC = () => {
               />
               <label htmlFor="terms" className="text-[11px] text-slate-400 leading-tight">
                 I accept the{' '}
-                <span className="text-cyan-400 hover:underline cursor-pointer">Terms of Service</span>,{' '}
-                <span className="text-cyan-400 hover:underline cursor-pointer">Refund Policy</span>, and{' '}
-                <span className="text-cyan-400 hover:underline cursor-pointer">Acceptable Use Policy</span>.
+                <span className="text-cyan-400 hover:underline cursor-pointer" onClick={e => { e.preventDefault(); setLegalView('terms'); }}>Terms of Service</span>,{' '}
+                <span className="text-cyan-400 hover:underline cursor-pointer" onClick={e => { e.preventDefault(); setLegalView('refund'); }}>Refund Policy</span>, and{' '}
+                <span className="text-cyan-400 hover:underline cursor-pointer" onClick={e => { e.preventDefault(); setLegalView('acceptable'); }}>Acceptable Use Policy</span>.
               </label>
             </div>
           )}
@@ -253,28 +231,25 @@ export const AuthModal: React.FC = () => {
           )}
         </div>
 
-        {/* Quick Demo Credentials */}
-        <div className="mt-6 pt-4 border-t border-slate-800/80">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 text-center mb-2">
-            Instant Demo Logins
+        {/* Legal viewer (terms / refund / acceptable use) */}
+        {legalView && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="relative w-full max-w-md bg-[#0b0f19] border border-slate-800 rounded-2xl p-6 text-slate-100 shadow-2xl">
+              <button
+                onClick={() => setLegalView(null)}
+                className="absolute top-4 right-4 p-1 text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+              <h3 className="text-base font-bold text-white uppercase font-display mb-3">
+                {LEGAL_TITLES[legalView]}
+              </h3>
+              <div className="text-xs text-slate-300 space-y-2 leading-relaxed max-h-[50vh] overflow-y-auto">
+                <LegalContent which={legalView} />
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleQuickLogin('demo')}
-              className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] font-medium text-slate-300 transition flex items-center justify-center gap-1.5"
-            >
-              <User className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Demo Customer</span>
-            </button>
-            <button
-              onClick={() => handleQuickLogin('admin')}
-              className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-indigo-500/30 text-[11px] font-medium text-indigo-300 transition flex items-center justify-center gap-1.5"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Admin Console</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

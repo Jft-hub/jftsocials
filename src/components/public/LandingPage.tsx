@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Hero3DCanvas } from '../3d/Hero3DCanvas.js';
 import { WhatsAppBadge } from '../layout/WhatsAppBadge.js';
+import { LegalContent } from '../common/LegalContent.js';
 import { useApp } from '../../context/AppContext.js';
 import { Currency } from '../../types/index.js';
 
@@ -459,37 +460,7 @@ export const LandingPage: React.FC = () => {
               {legalModal === 'acceptable' && 'Acceptable Use Policy'}
             </h3>
             <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
-              {legalModal === 'refund' ? (
-                <>
-                  <p>
-                    <strong>1. No Automatic Instant Refunds:</strong> To maintain operational integrity and prevent duplicate financial reversals, customers cannot initiate instant automated refunds directly from their dashboards.
-                  </p>
-                  <p>
-                    <strong>2. Investigation Flow:</strong> Customers experiencing order delays, partial delivery, or drops must submit a Support Ticket or contact our verified WhatsApp agent at <strong>+2347018409997</strong>.
-                  </p>
-                  <p>
-                    <strong>3. Admin Resolution:</strong> A platform administrator reviews the upstream P order ID. If approved, the refund is credited directly to the customer's wallet balance in the original currency (NGN or USDT) and recorded in the double-entry transaction ledger.
-                  </p>
-                </>
-              ) : legalModal === 'acceptable' ? (
-                <>
-                  <p>
-                    JFT Socials prohibits any use of our service that violates applicable international laws or promotes fraud, hate speech, defamation, or spam.
-                  </p>
-                  <p>
-                    Services are provided strictly for marketing and algorithmic reach enhancement. JFT Socials makes no warranty of permanent account safety or viral success.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    By accessing or utilizing JFT Socials (jftsocials.online), you agree to be bound by our operating guidelines, service minimums, and platform terms.
-                  </p>
-                  <p>
-                    All services are executed through verified upstream API nodes. Financial transactions are conducted under strict server-side authorization.
-                  </p>
-                </>
-              )}
+              <LegalContent which={legalModal as 'terms' | 'privacy' | 'refund' | 'acceptable'} />
             </div>
           </div>
         </div>
