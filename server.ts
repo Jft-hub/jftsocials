@@ -9,6 +9,7 @@ import { FiveSimClient } from './server/fiveSimClient.js';
 import { calculateOrderPrice, calculateNumberPrice, roundMoney } from './server/pricingEngine.js';
 import { AutomationEngine } from './server/automation.js';
 import { User, Currency, NumberOrder, AccountCategory, AccountListing, AccountOrder } from './src/types/index.js';
+import { verifyMirrorAtBoot } from './server/supabaseMirror.js';
 
 dotenv.config();
 
@@ -62,6 +63,14 @@ function getProviderClient(providerId?: string): ServiceProvider {
 
 const automation = new AutomationEngine(getProviderClient);
 automation.start();
+
+// Live Supabase mirror reconciliation log (warn-only, never blocks startup).
+// Reads still come from the local JSON file; this only reports counts.
+try {
+  verifyMirrorAtBoot(db.getMirrorCounts());
+} catch {
+  // intentionally silent
+}
 
 // Simple in-memory session token store (token -> userId)
 const activeSessions = new Map<string, string>();

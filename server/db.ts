@@ -24,6 +24,7 @@ import {
   AccountOrder,
   GroupedService
 } from '../src/types/index.js';
+import { queueMirrorSnapshot, MirrorSnapshot } from './supabaseMirror.js';
 
 interface DatabaseSchema {
   users: User[];
@@ -227,6 +228,111 @@ class Database {
     } finally {
       this.isWriting = false;
     }
+    // Live Supabase mirror (write-through backup). Fire-and-forget: it can
+    // never throw and never affects the JSON file or the current request.
+    try {
+      queueMirrorSnapshot(this.buildMirrorSnapshot());
+    } catch {
+      // intentionally silent - the local file is the source of truth
+    }
+  }
+
+  // Builds the small-table snapshot for Supabase. Only irreplaceable data;
+  // the multi-MB provider catalog is skipped (it re-syncs from providers).
+  // Every row is mapped to exact Supabase column names - unknown fields are
+  // dropped so a single bad key can never fail the batch.
+  private buildMirrorSnapshot(): MirrorSnapshot {
+    const s = this.data.settings || ({} as any);
+    const settings: any = {};
+    const SETTING_COLS = [
+      'platform_name', 'primary_domain', 'whatsapp_support_number',
+      'default_markup_percentage', 'default_min_margin_ngn',
+      'payment_fee_percentage', 'payment_fee_enabled',
+      'exchange_rate_usd_ngn', 'min_deposit_ngn', 'max_deposit_ngn',
+      'min_deposit_usdt', 'max_deposit_usdt', 'usdt_trc20_address',
+      'usdt_network', 'maintenance_mode', 'maintenance_message',
+      'peakerr_api_url', 'peakerr_key_configured', 'peakerr_api_key_encrypted',
+      'eagainsmedia_api_url', 'eagainsmedia_key_configured', 'eagainsmedia_api_key_encrypted',
+      'five_sim_rate_to_ngn', 'five_sim_markup_percentage',
+      'fivesim_key_configured', 'fivesim_api_key_encrypted',
+      'sync_interval_minutes', 'low_balance_threshold_usd'
+    ];
+    for (const c of SETTING_COLS) {
+      if (s[c] !== undefined) settings[c] = s[c];
+    }
+    return {
+      users: this.data.users || [],
+      wallets: this.data.wallets || [],
+      wallet_transactions: this.data.wallet_transactions || [],
+      orders: (this.data.orders || []).map((o: any) => ({
+        id: o.id, user_id: o.user_id, user_name: o.user_name ?? null,
+        user_email: o.user_email ?? null, service_id: o.service_id,
+        service_name: o.service_name ?? null, provider_id: o.provider_id || 'peakerr',
+        provider_service_id: o.provider_service_id ?? null,
+        provider_order_id: o.provider_order_id === undefined || o.provider_order_id === null
+          ? null : String(o.provider_order_id),
+        target_link: o.target_link, quantity: o.quantity,
+        provider_charge: o.provider_charge ?? 0, customer_charge: o.customer_charge ?? 0,
+        markup_amount: o.markup_amount ?? 0, markup_percentage: o.markup_percentage ?? 0,
+        minimum_markup: o.minimum_markup ?? 0, applied_markup: o.applied_markup ?? 0,
+        payment_fee: o.payment_fee ?? 0, net_profit: o.net_profit ?? 0,
+        currency: o.currency, exchange_rate_used: o.exchange_rate_used ?? 1500,
+        pricing_rule_version: o.pricing_rule_version || 'v1',
+        start_count: o.start_count ?? 0, remains: o.remains ?? 0,
+        status: o.status, provider_status: o.provider_status ?? null,
+        refill_eligible: !!o.refill_eligible, cancel_eligible: !!o.cancel_eligible,
+        last_refill_requested_at: o.last_refill_requested_at ?? null,
+        refunded_at: o.refunded_at ?? null, refund_reason: o.refund_reason ?? null,
+        refund_admin_id: o.refund_admin_id ?? null,
+        dispatch_attempts: o.dispatch_attempts ?? 0,
+        last_dispatch_attempt_at: o.last_dispatch_attempt_at ?? null,
+        created_at: o.created_at, updated_at: o.updated_at,
+        completed_at: o.completed_at ?? null
+      })),
+      number_orders: this.data.number_orders || [],
+      account_categories: (this.data.accountCategories || []).map((c: any) => ({
+        id: c.id, name: c.name, description: c.description || '',
+        price_ngn: c.price_ngn ?? 0, active: !!c.active, created_at: c.created_at
+      })),
+      account_listings: this.data.accountListings || [],
+      account_orders: this.data.accountOrders || [],
+      payments: (this.data.payments || []).map((p: any) => ({
+        id: p.id, user_id: p.user_id, user_name: p.user_name ?? null,
+        user_email: p.user_email ?? null, provider: p.provider, reference: p.reference,
+        amount: p.amount ?? 0, fee_amount: p.fee_amount ?? 0, net_amount: p.net_amount ?? 0,
+        currency: p.currency, status: p.status, metadata: p.metadata || {},
+        created_at: p.created_at, updated_at: p.updated_at
+      })),
+      support_tickets: this.data.support_tickets || [],
+      support_messages: this.data.support_messages || [],
+      notifications: this.data.notifications || [],
+      audit_logs: (this.data.audit_logs || []).map((a: any) => ({
+        id: a.id, actor_id: a.actor_id || '', actor_name: a.actor_name || '',
+        actor_role: a.actor_role || '', action: a.action || '',
+        entity_type: a.entity_type || '', entity_id: a.entity_id || '',
+        details: a.details || '', ip: a.ip || '', created_at: a.created_at
+      })),
+      settings: Object.keys(settings).length > 0 ? settings : null
+    };
+  }
+
+  // Row counts for the boot-time mirror verification log.
+  public getMirrorCounts(): Record<string, number> {
+    return {
+      users: this.data.users?.length || 0,
+      wallets: this.data.wallets?.length || 0,
+      wallet_transactions: this.data.wallet_transactions?.length || 0,
+      orders: this.data.orders?.length || 0,
+      number_orders: this.data.number_orders?.length || 0,
+      account_categories: this.data.accountCategories?.length || 0,
+      account_listings: this.data.accountListings?.length || 0,
+      account_orders: this.data.accountOrders?.length || 0,
+      payments: this.data.payments?.length || 0,
+      support_tickets: this.data.support_tickets?.length || 0,
+      support_messages: this.data.support_messages?.length || 0,
+      notifications: this.data.notifications?.length || 0,
+      audit_logs: this.data.audit_logs?.length || 0
+    };
   }
 
   private loadOrCreate(): DatabaseSchema {
