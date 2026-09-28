@@ -186,9 +186,10 @@ export class EagainsmediaClient implements ServiceProvider {
         console.warn(`[EagainsmediaClient] Upstream returned error: ${res.error}`);
         const errLower = res.error.toLowerCase();
         if (errLower.includes('not enough funds') || errLower.includes('balance') || errLower.includes('insufficient')) {
-          console.warn('[EagainsmediaClient] Provider balance empty. Falling back to sandbox simulation so customer order executes cleanly.');
-          const simulatedId = Math.floor(1000000 + Math.random() * 900000);
-          return { orderId: simulatedId };
+          // Honest failure: NEVER fabricate an order ID. A fake ID charges the
+          // customer for delivery that will never happen. The retry +
+          // auto-refund flow handles the error path instead.
+          console.error('[EagainsmediaClient] Provider balance empty - order NOT dispatched. Fund Engainsmedia.');
         }
         // Some Engainsmedia services reject a bare link with "Missing username".
         // Retry once with an explicit username field before giving up.

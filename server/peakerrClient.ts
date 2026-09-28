@@ -52,8 +52,6 @@ export interface ServiceProvider {
 export class PeakerrClient implements ServiceProvider {
   private apiKey: string;
   private apiUrl: string = 'https://peakerr.com/api/v2';
-  private mockOrderCounter: number = 248000;
-  private mockRefillCounter: number = 9400;
   private authSuspended: boolean = false;
   private lastAuthError?: string;
 
@@ -321,178 +319,135 @@ export class PeakerrClient implements ServiceProvider {
   }
 
   public async addOrder(service: number, link: string, quantity: number): Promise<{ orderId: number; error?: string }> {
-    if (this.isLive()) {
-      try {
-        const res = await this.request<PeakerrAddOrderResponse>({
-          action: 'add',
-          service,
-          link,
-          quantity
-        });
-
-        if (res && res.order) {
-          return { orderId: res.order };
-        }
-        if (res && res.error && (res.error.toLowerCase().includes('not enough funds') || res.error.toLowerCase().includes('balance'))) {
-          console.warn(`[PeakerrClient] Provider account balance is empty (${res.error}). Operating via reliable simulation fallback so customer order progresses smoothly.`);
-          this.mockOrderCounter += Math.floor(Math.random() * 5) + 1;
-          return { orderId: this.mockOrderCounter };
-        }
-        return { orderId: 0, error: res?.error || 'Unknown provider rejection' };
-      } catch (err: any) {
-        console.warn(`[PeakerrClient] Upstream provider dispatch threw: ${err.message}. Operating in sandbox simulation.`);
-        this.mockOrderCounter += Math.floor(Math.random() * 5) + 1;
-        return { orderId: this.mockOrderCounter };
-      }
+    // Honest failures only: NEVER fabricate an order ID. A fake ID marks the
+    // order "in progress" and charges the customer for boosting that will
+    // never happen. Returning an error lets the retry + auto-refund flow
+    // (server/automation.ts) do its job instead.
+    if (!this.isLive()) {
+      return { orderId: 0, error: 'Peakerr API key is not configured on this server.' };
     }
 
-    // Provider sandbox simulation
-    this.mockOrderCounter += Math.floor(Math.random() * 5) + 1;
-    return { orderId: this.mockOrderCounter };
+    try {
+      const res = await this.request<PeakerrAddOrderResponse>({
+        action: 'add',
+        service,
+        link,
+        quantity
+      });
+
+      if (res && res.order) {
+        return { orderId: res.order };
+      }
+      if (res && res.error && (res.error.toLowerCase().includes('not enough funds') || res.error.toLowerCase().includes('balance'))) {
+        console.error(`[PeakerrClient] Provider account balance is empty (${res.error}). Fund Peakerr - order NOT dispatched.`);
+      }
+      return { orderId: 0, error: res?.error || 'Unknown provider rejection' };
+    } catch (err: any) {
+      console.error(`[PeakerrClient] Upstream provider dispatch threw: ${err.message}. Order NOT dispatched.`);
+      return { orderId: 0, error: err.message || 'Connection failure while adding order to Peakerr' };
+    }
   }
 
   public async getOrderStatus(orderId: number | string): Promise<PeakerrStatusResponse> {
-    const numId = typeof orderId === 'number' ? orderId : parseInt(String(orderId), 10);
-    if (!isNaN(numId) && numId >= 248000) {
-      return {
-        status: 'In progress',
-        start_count: '1240',
-        remains: '0',
-        currency: 'USD'
-      };
+    // No simulated statuses: unknown IDs return an honest error so the
+    // automation backoff (server/automation.ts) quiets them instead of
+    // pretending dead orders are progressing.
+    if (!this.isLive()) {
+      return { error: 'Peakerr API key is not configured.' };
     }
 
-    if (this.isLive()) {
-      try {
-        const res = await this.request<PeakerrStatusResponse>({
-          action: 'status',
-          order: orderId
-        });
-        if (res && (res.status || res.remains !== undefined)) {
-          return res;
-        }
-      } catch (err: any) {
-        // Fall back to simulated progress
+    try {
+      const res = await this.request<PeakerrStatusResponse>({
+        action: 'status',
+        order: orderId
+      });
+      if (res && (res.status || res.remains !== undefined)) {
+        return res;
       }
+      return { error: res?.error || 'Unknown status response from Peakerr' };
+    } catch (err: any) {
+      return { error: err.message || 'Connection failure while checking Peakerr status' };
     }
-
-    // Dynamic progression simulator based on ID
-    return {
-      status: 'In progress',
-      start_count: '1240',
-      remains: '0',
-      currency: 'USD'
-    };
   }
 
   public async getMultipleOrderStatus(orderIds: (number | string)[]): Promise<Record<string, PeakerrStatusResponse>> {
     if (orderIds.length === 0) return {};
+    if (!this.isLive()) return {};
 
-    const mockIds: (number | string)[] = [];
-    const liveIds: (number | string)[] = [];
-
-    for (const id of orderIds) {
-      const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
-      if (!isNaN(numId) && numId >= 248000) {
-        mockIds.push(id);
-      } else {
-        liveIds.push(id);
-      }
+    try {
+      const commaSeparated = orderIds.slice(0, 100).join(',');
+      const res = await this.request<Record<string, PeakerrStatusResponse>>({
+        action: 'status',
+        orders: commaSeparated
+      });
+      return res || {};
+    } catch (err) {
+      return {};
     }
-
-    let results: Record<string, PeakerrStatusResponse> = {};
-
-    if (this.isLive() && liveIds.length > 0) {
-      try {
-        const commaSeparated = liveIds.slice(0, 100).join(',');
-        const res = await this.request<Record<string, PeakerrStatusResponse>>({
-          action: 'status',
-          orders: commaSeparated
-        });
-        if (res) results = { ...res };
-      } catch (err) {
-        // Continue to mock
-      }
-    }
-
-    for (const id of mockIds) {
-      results[String(id)] = {
-        status: 'In progress',
-        start_count: '1500',
-        remains: '0',
-        currency: 'USD'
-      };
-    }
-    return results;
   }
 
   public async createRefill(orderId: number | string): Promise<{ refillId?: string; error?: string }> {
-    if (this.isLive()) {
-      try {
-        const res = await this.request<{ refill?: string | number; error?: string }>({
-          action: 'refill',
-          order: orderId
-        });
-        if (res && res.refill) {
-          return { refillId: String(res.refill) };
-        }
-        return { error: res?.error || 'Refill declined by provider' };
-      } catch (err: any) {
-        return { error: err.message };
-      }
+    if (!this.isLive()) {
+      return { error: 'Peakerr API key is not configured.' };
     }
-
-    this.mockRefillCounter += 1;
-    return { refillId: String(this.mockRefillCounter) };
+    try {
+      const res = await this.request<{ refill?: string | number; error?: string }>({
+        action: 'refill',
+        order: orderId
+      });
+      if (res && res.refill) {
+        return { refillId: String(res.refill) };
+      }
+      return { error: res?.error || 'Refill declined by provider' };
+    } catch (err: any) {
+      return { error: err.message };
+    }
   }
 
   public async getRefillStatus(refillId: string): Promise<{ status?: string; error?: string }> {
-    if (this.isLive()) {
-      try {
-        return await this.request<{ status?: string; error?: string }>({
-          action: 'refill_status',
-          refill: refillId
-        });
-      } catch (err: any) {
-        return { error: err.message };
-      }
+    if (!this.isLive()) {
+      return { error: 'Peakerr API key is not configured.' };
     }
-
-    return { status: 'Completed' };
+    try {
+      return await this.request<{ status?: string; error?: string }>({
+        action: 'refill_status',
+        refill: refillId
+      });
+    } catch (err: any) {
+      return { error: err.message };
+    }
   }
 
   public async cancelOrders(orderIds: (number | string)[]): Promise<{ success: boolean; error?: string }> {
-    if (this.isLive()) {
-      try {
-        const res = await this.request<any>({
-          action: 'cancel',
-          orders: orderIds.join(',')
-        });
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err.message };
-      }
+    if (!this.isLive()) {
+      return { success: false, error: 'Peakerr API key is not configured.' };
     }
-
-    return { success: true };
+    try {
+      await this.request<any>({
+        action: 'cancel',
+        orders: orderIds.join(',')
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   }
 
   public async getBalance(): Promise<{ balance: number; currency: string; error?: string }> {
-    if (this.isLive()) {
-      try {
-        const res = await this.request<PeakerrBalanceResponse>({ action: 'balance' });
-        if (res && res.balance) {
-          return {
-            balance: parseFloat(res.balance),
-            currency: res.currency || 'USD'
-          };
-        }
-        return { balance: 0, currency: 'USD', error: res?.error };
-      } catch (err: any) {
-        return { balance: 0, currency: 'USD', error: err.message };
-      }
+    if (!this.isLive()) {
+      return { balance: 0, currency: 'USD', error: 'Peakerr API key is not configured.' };
     }
-
-    return { balance: 482.65, currency: 'USD' };
+    try {
+      const res = await this.request<PeakerrBalanceResponse>({ action: 'balance' });
+      if (res && res.balance) {
+        return {
+          balance: parseFloat(res.balance),
+          currency: res.currency || 'USD'
+        };
+      }
+      return { balance: 0, currency: 'USD', error: res?.error };
+    } catch (err: any) {
+      return { balance: 0, currency: 'USD', error: err.message };
+    }
   }
 }
