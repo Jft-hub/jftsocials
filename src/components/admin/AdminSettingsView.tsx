@@ -69,8 +69,8 @@ export const AdminSettingsView: React.FC = () => {
           setEagainsmediaConfigured(Boolean(s.eagainsmedia_key_configured));
 
           setFivesimConfigured(Boolean(s.fivesim_key_configured));
-          setFivesimNgnRate(s.fivesim_ngn_rate || 25.0);
-          setFivesimMarkupPercent(s.fivesim_markup_percent || 50);
+          setFivesimNgnRate(s.five_sim_rate_to_ngn ?? s.fivesim_ngn_rate ?? 25.0);
+          setFivesimMarkupPercent(s.five_sim_markup_percentage ?? s.fivesim_markup_percent ?? 50);
           setFivesimMinMarginNgn(s.fivesim_min_margin_ngn || 200);
         }
       })
@@ -119,8 +119,8 @@ export const AdminSettingsView: React.FC = () => {
         min_deposit_ngn: Number(minDepositNgn),
         peakerr_api_url: peakerrApiUrl,
         eagainsmedia_api_url: eagainsmediaApiUrl,
-        fivesim_ngn_rate: Number(fivesimNgnRate),
-        fivesim_markup_percent: Number(fivesimMarkupPercent),
+        five_sim_rate_to_ngn: Number(fivesimNgnRate),
+        five_sim_markup_percentage: Number(fivesimMarkupPercent),
         fivesim_min_margin_ngn: Number(fivesimMinMarginNgn)
       };
 

@@ -2172,6 +2172,18 @@ const handleUpdateSettings = (req: AuthenticatedRequest, res: any) => {
     delete updates.fivesim_api_key;
   }
 
+  // Backward compatibility: older admin clients saved the 5sim rate fields
+  // under different names. Map them to the canonical settings keys consumed
+  // by the pricing engine (server/pricingEngine.ts).
+  if (updates.fivesim_ngn_rate !== undefined && updates.five_sim_rate_to_ngn === undefined) {
+    updates.five_sim_rate_to_ngn = updates.fivesim_ngn_rate;
+  }
+  delete updates.fivesim_ngn_rate;
+  if (updates.fivesim_markup_percent !== undefined && updates.five_sim_markup_percentage === undefined) {
+    updates.five_sim_markup_percentage = updates.fivesim_markup_percent;
+  }
+  delete updates.fivesim_markup_percent;
+
   const updated = db.updateSettings(updates, admin, req.ip || '127.0.0.1');
   const {
     peakerr_api_key_encrypted,

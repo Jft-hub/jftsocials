@@ -331,7 +331,7 @@ export const WalletView: React.FC = () => {
                   return (
                     <tr key={tx.id} className="hover:bg-slate-900/40 transition">
                       <td className="py-3 px-3 font-mono font-bold text-white text-[11px]">
-                        {tx.reference}
+                        {tx.reference_id}
                       </td>
                       <td className="py-3 px-3">
                         <span
