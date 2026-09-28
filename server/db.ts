@@ -342,6 +342,32 @@ class Database {
     if (settings && typeof settings === 'object') {
       this.data.settings = { ...this.data.settings, ...settings };
     }
+    // Ledger reconciliation: a wallet snapshot can miss the final seconds
+    // before a wipe, but every ledger entry carries its balance_after. Replay
+    // the latest entry per wallet so balances always match history.
+    try {
+      const latestByWallet = new Map<string, any>();
+      for (const t of this.data.wallet_transactions || []) {
+        if (!t || !t.wallet_id) continue;
+        const prev = latestByWallet.get(t.wallet_id);
+        if (!prev || String(t.created_at) > String(prev.created_at)) {
+          latestByWallet.set(t.wallet_id, t);
+        }
+      }
+      for (const w of this.data.wallets || []) {
+        const t = latestByWallet.get(w.id);
+        if (
+          t && typeof t.balance_after === 'number' && isFinite(t.balance_after) &&
+          (!t.currency || t.currency === w.currency) &&
+          w.available_balance !== t.balance_after
+        ) {
+          console.log(`[Restore] Reconciled wallet ${w.id}: ${w.available_balance} -> ${t.balance_after} (ledger)`);
+          w.available_balance = t.balance_after;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Restore] Ledger reconciliation skipped:', e.message || e);
+    }
     this.save();
   }
 
