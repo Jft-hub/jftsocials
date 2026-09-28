@@ -17,8 +17,53 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Behind Render's load balancer: needed so req.ip is the real visitor
+// (without this, rate limiting would throttle all users as one).
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+app.use(express.json({ limit: '200kb' }));
+app.use(express.urlencoded({ extended: true, limit: '200kb' }));
+
+// ---- Security headers (no dependencies, safe subset that cannot break
+// the Vite bundle or the Paystack inline script) ----
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+// ---- Lightweight rate limiting (in-memory; single instance) ----
+// Fails open: any limiter error skips straight to next(), never blocks legit traffic.
+const rateBuckets = new Map<string, number[]>();
+function rateLimit(maxHits: number, windowMs: number) {
+  return (req: any, res: any, next: any) => {
+    try {
+      const key = `${req.ip || 'anon'}:${req.path}`;
+      const now = Date.now();
+      const hits = (rateBuckets.get(key) || []).filter(t => now - t < windowMs);
+      hits.push(now);
+      rateBuckets.set(key, hits);
+      if (rateBuckets.size > 5000) {
+        for (const [k, v] of rateBuckets) {
+          if (v.length === 0 || now - v[v.length - 1] > windowMs) rateBuckets.delete(k);
+          if (rateBuckets.size < 4000) break;
+        }
+      }
+      if (hits.length > maxHits) {
+        return res.status(429).json({ success: false, error: 'Too many requests. Please slow down and retry.' });
+      }
+      next();
+    } catch {
+      next();
+    }
+  };
+}
+const authLimiter = rateLimit(20, 60 * 1000); // login/register: 20 per minute per IP
+const moneyLimiter = rateLimit(30, 60 * 1000); // orders/payments/numbers: 30 per minute per IP
+app.use('/api/auth/', authLimiter);
 
 // Initialize Provider Clients & Automation Engine
 // Prefer keys saved through the admin panel (encrypted in DB) over .env values
@@ -524,7 +569,7 @@ app.post('/api/services/calculate-price', handleCalculatePrice);
 // ORDERS (CUSTOMER)
 // -----------------------------
 
-app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/orders', moneyLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
     const rawServiceId = req.body.service_id || req.body.serviceId || req.body.service;
@@ -580,6 +625,39 @@ app.post('/api/orders', authenticate, async (req: AuthenticatedRequest, res) => 
 
     const settings = db.getSettings();
     const orderCurrency = (currency as Currency) === 'USDT' ? 'USDT' : 'NGN';
+
+    // Duplicate-submission guard: an identical order (same service, link,
+    // quantity) placed within the last 90 seconds is a double-click, not a
+    // second order. Return the original instead of charging twice.
+    const dupeWindowMs = 90 * 1000;
+    const dupe = db.getOrders(user.id).find(o =>
+      o.service_id === service.id &&
+      o.target_link === target_link &&
+      o.quantity === numQuantity &&
+      o.currency === orderCurrency &&
+      !['cancelled', 'refunded', 'failed'].includes(o.status) &&
+      (Date.now() - new Date(o.created_at).getTime()) < dupeWindowMs
+    );
+    if (dupe) {
+      const dupeWallet = db.getWallets(user.id).find(w => w.currency === orderCurrency);
+      console.log(`[OrderCreation] Duplicate submission blocked for ${user.id} - returning existing ${dupe.id}`);
+      return res.json({
+        success: true,
+        duplicate: true,
+        order: {
+          id: dupe.id,
+          service_name: dupe.service_name,
+          target_link: dupe.target_link,
+          link: dupe.target_link,
+          quantity: dupe.quantity,
+          customer_charge: dupe.customer_charge,
+          currency: dupe.currency,
+          status: dupe.status,
+          created_at: dupe.created_at
+        },
+        remaining_balance: dupeWallet?.available_balance || 0
+      });
+    }
 
     // 1. Calculate price server-side using strict JFT Socials formula
     const pricing = calculateOrderPrice({
@@ -964,7 +1042,7 @@ app.get('/api/numbers/products', async (req, res) => {
   }
 });
 
-app.post('/api/numbers/order', authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
     const { country = 'any', operator = 'any', product, currency = 'NGN' } = req.body;
@@ -1191,7 +1269,7 @@ app.get('/api/accounts/categories', (req, res) => {
 // credentials if that succeeds. If the wallet debit throws (insufficient
 // balance), execution never reaches claimAccountListing, so nothing is
 // ever handed out unpaid.
-app.post('/api/accounts/buy', authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/accounts/buy', moneyLimiter, authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
     const { category_id } = req.body;
@@ -1285,7 +1363,7 @@ app.get('/api/wallet/transactions', authenticate, (req: AuthenticatedRequest, re
 });
 
 // Paystack NGN Deposit Flow
-app.post('/api/payments/paystack/initialize', authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/payments/paystack/initialize', moneyLimiter, authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
     const { amount } = req.body;
@@ -1463,7 +1541,7 @@ app.get('/api/payments/paystack/verify/:reference', authenticate, handlePaystack
 app.post('/api/payments/paystack/verify/:reference?', authenticate, handlePaystackVerify);
 
 // USDT Crypto Deposit Submission
-app.post('/api/payments/usdt/submit', authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/payments/usdt/submit', moneyLimiter, authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
     const { amount, transaction_hash, network = 'TRC-20' } = req.body;
