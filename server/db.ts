@@ -24,7 +24,7 @@ import {
   AccountOrder,
   GroupedService
 } from '../src/types/index.js';
-import { queueMirrorSnapshot, MirrorSnapshot } from './supabaseMirror.js';
+import { queueMirrorSnapshot, queueRemoteDelete, MirrorSnapshot } from './supabaseMirror.js';
 
 interface DatabaseSchema {
   users: User[];
@@ -1104,6 +1104,13 @@ class Database {
     if (!this.data.deleted_users.includes(id)) this.data.deleted_users.push(id);
 
     this.save();
+    // Propagate the delete upstream IMMEDIATELY (not in the 45s batch), or a
+    // fast redeploy resurrects the user from the mirror on next boot.
+    try {
+      queueRemoteDelete(id);
+    } catch {
+      // local delete already succeeded; remote converges on next flush
+    }
     return { ordersKept: kept };
   }
 

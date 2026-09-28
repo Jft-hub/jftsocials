@@ -126,6 +126,75 @@ export function queueMirrorSnapshot(snapshot: MirrorSnapshot): void {
   }
 }
 
+// Immediate remote delete. Upserts can never delete, so a plain mirror batch
+// leaves dead rows in Supabase that a later restore would resurrect. This
+// runs its DELETEs right away (not in the 45s batch) plus the tombstone
+// upsert, and is fire-and-forget: it never throws and never affects local data.
+export function queueRemoteDelete(userId: string): void {
+  try {
+    const cfg = config();
+    if (!cfg || !userId) return;
+    (async () => {
+      try {
+        const H = {
+          apikey: cfg.key,
+          Authorization: `Bearer ${cfg.key}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        };
+        const del = async (table: string, col: string, val: string) => {
+          try {
+            await fetch(
+              `${cfg.url}/rest/v1/${table}?${col}=eq.${encodeURIComponent(val)}`,
+              { method: 'DELETE', headers: H }
+            );
+          } catch (e: any) {
+            console.warn(`[SupabaseMirror] remote delete ${table} failed:`, e.message || e);
+          }
+        };
+        // Support messages reference tickets, so resolve ticket ids first.
+        let ticketIds: string[] = [];
+        try {
+          const res = await fetch(
+            `${cfg.url}/rest/v1/support_tickets?user_id=eq.${encodeURIComponent(userId)}&select=id`,
+            { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` } }
+          );
+          if (res.ok) {
+            const rows = (await res.json()) as any[];
+            ticketIds = (rows || []).map(r => r.id).filter(Boolean);
+          }
+        } catch {
+          // proceed with the rest regardless
+        }
+        for (const tid of ticketIds) {
+          await del('support_messages', 'ticket_id', tid);
+        }
+        await del('support_tickets', 'user_id', userId);
+        await del('notifications', 'user_id', userId);
+        await del('wallet_transactions', 'user_id', userId);
+        await del('wallets', 'user_id', userId);
+        await del('users', 'id', userId);
+        // Tombstone LAST (after the rows are gone) so a crash mid-way still
+        // converges: restore filters by tombstones, never by row absence.
+        try {
+          await fetch(`${cfg.url}/rest/v1/deleted_users`, {
+            method: 'POST',
+            headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify([{ id: userId }]),
+          });
+        } catch (e: any) {
+          console.warn('[SupabaseMirror] tombstone upsert failed:', e.message || e);
+        }
+        console.log(`[SupabaseMirror] Remote delete complete for user ${userId}.`);
+      } catch (e: any) {
+        console.warn('[SupabaseMirror] Remote delete failed (local delete unaffected):', e.message || e);
+      }
+    })();
+  } catch {
+    // intentionally silent
+  }
+}
+
 // Boot-time reconciliation log: compares local counts vs Supabase counts.
 // Warn-only. Never throws, never blocks startup.
 export function verifyMirrorAtBoot(local: Record<string, number>): void {

@@ -183,7 +183,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.provider_balance === null || stats?.provider_balance === undefined
               ? <span className="text-slate-500">—</span>
-              : <span>${Number(stats.provider_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.provider_balance_currency || 'USD'}</span>
+              : <span>{(stats?.provider_balance_currency || 'USD') === 'NGN' ? '₦' : '$'}{Number(stats.provider_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.provider_balance_currency || 'USD'}</span>
           </div>
           <div className="text-[11px] text-cyan-400">
             {stats?.provider_is_live ? 'Key: Live' : 'Key: Unknown / offline'}
@@ -194,7 +194,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.eagainsmedia_balance === null || stats?.eagainsmedia_balance === undefined
               ? <span className="text-slate-500">—</span>
-              : <span>${Number(stats.eagainsmedia_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.eagainsmedia_balance_currency || 'USD'}</span>
+              : <span>{(stats?.eagainsmedia_balance_currency || 'USD') === 'NGN' ? '₦' : '$'}{Number(stats.eagainsmedia_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.eagainsmedia_balance_currency || 'USD'}</span>
           </div>
           <div className="text-[11px] text-slate-400">
             SMM failover lane
