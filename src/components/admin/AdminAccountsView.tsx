@@ -50,6 +50,30 @@ export const AdminAccountsView: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [rawCredentials, setRawCredentials] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  // Single-account entry (separate boxes so email/password can't mix up)
+  const [singleEmail, setSingleEmail] = useState('');
+  const [singlePassword, setSinglePassword] = useState('');
+
+  const handleAddSingleToList = () => {
+    const email = singleEmail.trim();
+    const password = singlePassword.trim();
+    if (!email || !password) {
+      showToast('Type both the email and the password first.', 'error');
+      return;
+    }
+    if (!email.includes('@')) {
+      showToast('That email does not look valid - check it before adding.', 'error');
+      return;
+    }
+    if (password.includes(':')) {
+      showToast('Password cannot contain a colon (:) - it breaks the line format.', 'error');
+      return;
+    }
+    setRawCredentials(prev => (prev.trim() ? `${prev.trim()}\n${email}:${password}` : `${email}:${password}`));
+    setSingleEmail('');
+    setSinglePassword('');
+    showToast('Account added to the list below - press Upload & Encrypt Stock to save.', 'success');
+  };
   const [uploadResult, setUploadResult] = useState<{
     added: number;
     rejected_count: number;
@@ -404,10 +428,47 @@ export const AdminAccountsView: React.FC = () => {
               </select>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+              <div className="sm:col-span-2 text-xs font-bold text-white">
+                Add ONE account <span className="font-normal text-slate-400">(email and password in separate boxes)</span>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-cyan-300 mb-1">
+                  Account Email
+                </label>
+                <input
+                  type="text"
+                  value={singleEmail}
+                  onChange={e => setSingleEmail(e.target.value)}
+                  placeholder="user@gmail.com"
+                  className="w-full px-3 py-2 bg-slate-950 border border-cyan-800/50 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-amber-300 mb-1">
+                  Account Password
+                </label>
+                <input
+                  type="text"
+                  value={singlePassword}
+                  onChange={e => setSinglePassword(e.target.value)}
+                  placeholder="SecretPass123!"
+                  className="w-full px-3 py-2 bg-slate-950 border border-amber-800/50 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddSingleToList}
+                className="sm:col-span-2 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition cursor-pointer"
+              >
+                + Add to list below
+              </button>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  Credentials Input
+                  Credentials Input (bulk list)
                 </label>
                 <span className="text-[10px] text-slate-500 font-mono">Format: email:password</span>
               </div>

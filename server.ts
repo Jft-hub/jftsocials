@@ -1286,10 +1286,23 @@ app.post('/api/accounts/buy', moneyLimiter, authenticate, (req: AuthenticatedReq
     const orderId = `acctord_${crypto.randomBytes(8).toString('hex')}`;
 
     // 1. Payment first — throws on insufficient balance, aborting the whole request.
+    //    Nothing (credentials, logs, history) is revealed before this succeeds.
     db.debitWallet(user.id, 'NGN', category.price_ngn, 'order', orderId, `Account purchase: ${category.name}`);
 
     // 2. Only now, with payment confirmed, claim a unit and hand over credentials.
-    const listing = db.claimAccountListing(category_id, user.id, orderId);
+    //    If the claim loses a stock race, refund immediately so money never
+    //    leaves without an account attached.
+    let listing;
+    try {
+      listing = db.claimAccountListing(category_id, user.id, orderId);
+    } catch (claimErr: any) {
+      try {
+        db.creditWallet(user.id, 'NGN', category.price_ngn, 'refund', `REF-${orderId}`, `Refund: stock race on ${category.name}`);
+      } catch (refundErr: any) {
+        console.error(`[AccountStore] REFUND FAILED for ${orderId} - manual review required:`, refundErr.message || refundErr);
+      }
+      throw claimErr;
+    }
 
     const order = db.createAccountOrder({
       id: orderId,

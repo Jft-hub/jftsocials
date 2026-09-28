@@ -130,7 +130,7 @@ export const ServicesView: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    ID #{service.id.replace('srv_', '')}
+                    ID #{service.id.replace('srv_', '').replace('peakerr', 'P').replace('eagainsmedia', 'E')}
                   </span>
                   <div className="flex items-center gap-1">
                     {service.refill_supported && (
