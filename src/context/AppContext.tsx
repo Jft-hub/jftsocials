@@ -141,7 +141,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [token, refreshUserData, refreshOrders, refreshNotifications]);
 
-  // Auto-polling for real-time live order updates every 8 seconds when authenticated
+  // Auto-polling for live order updates every 25 seconds when authenticated.
+  // (Was 8s: three API calls every 8 seconds per open tab was hammering the
+  // small server and slowing the whole site for everyone.)
   useEffect(() => {
     if (!token) return;
 
@@ -149,7 +151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshOrders();
       refreshUserData();
       refreshNotifications();
-    }, 8000);
+    }, 25000);
 
     return () => clearInterval(timer);
   }, [token, refreshUserData, refreshOrders, refreshNotifications]);

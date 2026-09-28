@@ -51,14 +51,15 @@ export class AutomationEngine {
     }
     // Run an initial order-status sync after 5 seconds
     setTimeout(() => this.runOrderSync(), 5000);
-    // Then every 15 seconds for responsive live updates
-    this.syncTimer = setInterval(() => this.runOrderSync(), 15000);
+    // Then every 60 seconds. (Was 15s: on small instances the tight loop
+    // starved the API thread and made the whole site feel slow.)
+    this.syncTimer = setInterval(() => this.runOrderSync(), 60 * 1000);
 
     // Pull the full service catalog from every configured provider shortly
     // after boot, then keep it fresh on a slower schedule (catalogs don't
     // change minute to minute the way order statuses do).
-    setTimeout(() => this.syncAllProviderCatalogs(), 10000);
-    this.serviceSyncTimer = setInterval(() => this.syncAllProviderCatalogs(), 30 * 60 * 1000); // every 30 minutes
+    setTimeout(() => this.syncAllProviderCatalogs(), 30000);
+    this.serviceSyncTimer = setInterval(() => this.syncAllProviderCatalogs(), 2 * 60 * 60 * 1000); // every 2 hours
   }
 
   public stop() {
