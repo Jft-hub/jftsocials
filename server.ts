@@ -1733,17 +1733,32 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
       }
     }
 
-    // Provider balance is best-effort (upstream can be slow); null = unknown.
+    // Provider balances are best-effort (upstream can be slow); null = unknown.
+    // Never fake a number: unknown renders as "—".
     let providerBalance: number | null = null;
     let providerCurrency = 'USD';
+    let eagainsBalance: number | null = null;
+    let eagainsCurrency = 'USD';
+    let fivesimBalance: number | null = null;
     try {
-      const pb = await peakerr.getBalance();
+      const [pb, eb, fb] = await Promise.all([
+        peakerr.getBalance().catch(() => ({ balance: 0, currency: 'USD', error: 'unreachable' })),
+        eagainsmedia.getBalance().catch(() => ({ balance: 0, currency: 'USD', error: 'unreachable' })),
+        fiveSim.getBalance().catch(() => ({ balance: 0, error: 'unreachable' } as any))
+      ]);
       if (!pb.error) {
         providerBalance = pb.balance;
         providerCurrency = pb.currency || 'USD';
       }
+      if (!eb.error) {
+        eagainsBalance = eb.balance;
+        eagainsCurrency = eb.currency || 'USD';
+      }
+      if (fb && typeof fb.balance === 'number' && !(fb as any).error) {
+        fivesimBalance = fb.balance;
+      }
     } catch {
-      // leave null - dashboard shows "unknown", never a fake number
+      // leave nulls - dashboard shows "unknown", never a fake number
     }
 
     res.json({
@@ -1759,6 +1774,9 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
         services_count: services.filter(s => s.active).length,
         provider_balance: providerBalance,
         provider_balance_currency: providerCurrency,
+        eagainsmedia_balance: eagainsBalance,
+        eagainsmedia_balance_currency: eagainsCurrency,
+        fivesim_balance: fivesimBalance,
         provider_is_live: peakerr.isLive(),
         min_margin_ngn: settings.default_min_margin_ngn,
         default_markup_percentage: settings.default_markup_percentage

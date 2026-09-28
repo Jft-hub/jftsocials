@@ -179,14 +179,36 @@ export const AdminDashboard: React.FC = () => {
       {/* Upstream Provider Balances & Pipeline */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
-          <div className="text-xs text-slate-400">Upstream Peakerr Balance</div>
+          <div className="text-xs text-slate-400">Peakerr Balance</div>
           <div className="text-2xl font-bold font-mono text-white">
             {stats?.provider_balance === null || stats?.provider_balance === undefined
               ? <span className="text-slate-500">—</span>
               : <span>${Number(stats.provider_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.provider_balance_currency || 'USD'}</span>
           </div>
           <div className="text-[11px] text-cyan-400">
-            {stats?.provider_is_live ? 'Node status: Live' : 'Node status: Unknown / offline'}
+            {stats?.provider_is_live ? 'Key: Live' : 'Key: Unknown / offline'}
+          </div>
+        </div>
+        <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
+          <div className="text-xs text-slate-400">Engainsmedia Balance</div>
+          <div className="text-2xl font-bold font-mono text-white">
+            {stats?.eagainsmedia_balance === null || stats?.eagainsmedia_balance === undefined
+              ? <span className="text-slate-500">—</span>
+              : <span>${Number(stats.eagainsmedia_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.eagainsmedia_balance_currency || 'USD'}</span>
+          </div>
+          <div className="text-[11px] text-slate-400">
+            SMM failover lane
+          </div>
+        </div>
+        <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
+          <div className="text-xs text-slate-400">5sim Balance</div>
+          <div className="text-2xl font-bold font-mono text-white">
+            {stats?.fivesim_balance === null || stats?.fivesim_balance === undefined
+              ? <span className="text-slate-500">—</span>
+              : <span>{Number(stats.fivesim_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">USD</span>
+          </div>
+          <div className="text-[11px] text-slate-400">
+            Virtual numbers wallet
           </div>
         </div>
 
