@@ -2454,17 +2454,25 @@ const handleUpdateSettings = (req: AuthenticatedRequest, res: any) => {
     delete updates.fivesim_api_key;
   }
 
-  // Backward compatibility: older admin clients saved the 5sim rate fields
-  // under different names. Map them to the canonical settings keys consumed
-  // by the pricing engine (server/pricingEngine.ts).
-  if (updates.fivesim_ngn_rate !== undefined && updates.five_sim_rate_to_ngn === undefined) {
-    updates.five_sim_rate_to_ngn = updates.fivesim_ngn_rate;
+  // Backward compatibility: older admin clients saved several settings
+  // under different names (pricing page, settings page). Map them to the
+  // canonical keys consumed by the pricing engine (server/pricingEngine.ts),
+  // otherwise admin saves silently change nothing.
+  const LEGACY_SETTINGS_MAP: Record<string, string> = {
+    fivesim_ngn_rate: 'five_sim_rate_to_ngn',
+    fivesim_markup_percent: 'five_sim_markup_percentage',
+    default_markup_percent: 'default_markup_percentage',
+    minimum_markup_ngn: 'default_min_margin_ngn',
+    exchange_rate_usdt_ngn: 'exchange_rate_usd_ngn',
+    deposit_fee_percent: 'payment_fee_percentage',
+    support_whatsapp: 'whatsapp_support_number'
+  };
+  for (const [legacyKey, canonicalKey] of Object.entries(LEGACY_SETTINGS_MAP)) {
+    if (updates[legacyKey] !== undefined && updates[canonicalKey] === undefined) {
+      updates[canonicalKey] = updates[legacyKey];
+    }
+    delete updates[legacyKey];
   }
-  delete updates.fivesim_ngn_rate;
-  if (updates.fivesim_markup_percent !== undefined && updates.five_sim_markup_percentage === undefined) {
-    updates.five_sim_markup_percentage = updates.fivesim_markup_percent;
-  }
-  delete updates.fivesim_markup_percent;
 
   const updated = db.updateSettings(updates, admin, req.ip || '127.0.0.1');
   const {
