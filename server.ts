@@ -10,6 +10,7 @@ import { calculateOrderPrice, calculateNumberPrice, roundMoney } from './server/
 import { AutomationEngine } from './server/automation.js';
 import { User, Currency, NumberOrder, AccountCategory, AccountListing, AccountOrder } from './src/types/index.js';
 import { verifyMirrorAtBoot } from './server/supabaseMirror.js';
+import { maybeRestoreFromMirror } from './server/supabaseRestore.js';
 
 dotenv.config();
 
@@ -2412,6 +2413,17 @@ app.get('/api/admin/audit-logs', verifyAdmin, (req, res) => {
 // -----------------------------
 
 async function start() {
+  // Self-healing: if Supabase holds newer live data than the local JSON file
+  // (e.g. after a redeploy reset the file), pull it down BEFORE serving.
+  // Never throws, never delays boot more than ~25s, never overwrites newer local data.
+  try {
+    await maybeRestoreFromMirror(db.getMirrorCounts(), (tables, settings) =>
+      db.restoreFromMirror(tables, settings)
+    );
+  } catch {
+    // boot continues on the local file
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

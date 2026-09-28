@@ -316,6 +316,35 @@ class Database {
     };
   }
 
+  // Applies a Supabase mirror download after boot-time healing decides the
+  // remote is strictly newer. Small tables are replaced wholesale; the
+  // provider catalog is never touched. Persists to the local file immediately.
+  public restoreFromMirror(tables: Record<string, any[]>, settings: any | null): void {
+    const pick = (k: string): any[] | null =>
+      Array.isArray(tables[k]) ? tables[k] : null;
+    const assign = (tableKey: string, dataKey: string) => {
+      const rows = pick(tableKey);
+      if (rows) (this.data as any)[dataKey] = rows;
+    };
+    assign('users', 'users');
+    assign('wallets', 'wallets');
+    assign('wallet_transactions', 'wallet_transactions');
+    assign('orders', 'orders');
+    assign('number_orders', 'number_orders');
+    assign('account_categories', 'accountCategories');
+    assign('account_listings', 'accountListings');
+    assign('account_orders', 'accountOrders');
+    assign('payments', 'payments');
+    assign('support_tickets', 'support_tickets');
+    assign('support_messages', 'support_messages');
+    assign('notifications', 'notifications');
+    assign('audit_logs', 'audit_logs');
+    if (settings && typeof settings === 'object') {
+      this.data.settings = { ...this.data.settings, ...settings };
+    }
+    this.save();
+  }
+
   // Row counts for the boot-time mirror verification log.
   public getMirrorCounts(): Record<string, number> {
     return {
