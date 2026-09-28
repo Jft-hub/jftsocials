@@ -65,6 +65,34 @@ function getProviderClient(providerId?: string): ServiceProvider {
 const automation = new AutomationEngine(getProviderClient);
 automation.start();
 
+// Self keep-alive: while this instance is awake, knock on our own public
+// /api/health every 10 minutes so the host never sees 15 idle minutes.
+// Honest limits: this PREVENTS sleep, it cannot WAKE a sleeping server
+// (timers don't run while asleep) - keep the external pinger as the waker.
+// Bandwidth cost is ~100 bytes per knock. Never touches money or the DB.
+{
+  const SELF_PING_MINUTES = 10;
+  const publicUrl = (process.env.APP_URL || '').trim().replace(/\/$/, '');
+  if (!publicUrl || !/^https?:\/\//i.test(publicUrl)) {
+    console.log('[KeepAlive] APP_URL not set - self-ping disabled (set APP_URL to enable).');
+  } else {
+    const knock = async () => {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 10000);
+        await fetch(`${publicUrl}/api/health`, { signal: controller.signal });
+        clearTimeout(t);
+      } catch {
+        // Asleep, restarting, or network blip - next knock in 10 minutes.
+        // External pinger handles the wake-up.
+      }
+    };
+    const timer = setInterval(knock, SELF_PING_MINUTES * 60 * 1000);
+    if (typeof (timer as any).unref === 'function') (timer as any).unref();
+    console.log(`[KeepAlive] Self-ping enabled: ${publicUrl}/api/health every ${SELF_PING_MINUTES}min.`);
+  }
+}
+
 // Live Supabase mirror reconciliation log (warn-only, never blocks startup).
 // Reads still come from the local JSON file; this only reports counts.
 try {
