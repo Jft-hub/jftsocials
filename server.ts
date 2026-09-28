@@ -915,12 +915,28 @@ app.post('/api/numbers/order', authenticate, async (req: AuthenticatedRequest, r
     const orderCurrency: Currency = (currency as Currency) === 'USDT' ? 'USDT' : 'NGN';
     const settings = db.getSettings();
 
+    // 0. Provider readiness: never debit the customer for a number we cannot buy.
+    // 5sim is prepaid-only (top-ups are manual on 5sim.net - no API funding),
+    // so refuse early when our upstream balance can't cover this activation.
+    if (!fiveSim.isLive()) {
+      return res.status(503).json({ success: false, error: 'Virtual numbers are temporarily unavailable. Please try again later or contact support.' });
+    }
+
     // 1. Fetch live product price from 5sim
     const rawProducts = await fiveSim.getProducts(country, operator);
     const productInfo = rawProducts[product];
 
     if (!productInfo || productInfo.Qty === 0) {
       return res.status(400).json({ success: false, error: `No virtual numbers currently available for ${product} in ${country}.` });
+    }
+
+    try {
+      const upstreamBalance = await fiveSim.getBalance();
+      if (!upstreamBalance || typeof upstreamBalance.balance !== 'number' || upstreamBalance.balance < productInfo.Price) {
+        return res.status(503).json({ success: false, error: 'Virtual numbers are temporarily out of stock upstream. Please try again later.' });
+      }
+    } catch (balanceErr: any) {
+      console.warn('[Numbers] Upstream balance check failed, proceeding to purchase attempt:', balanceErr.message || balanceErr);
     }
 
     // 2. Calculate customer price with markup
@@ -1617,6 +1633,77 @@ app.get('/api/admin/dashboard', verifyAdmin, async (req, res) => {
         provider_balance_currency: providerBalance.currency,
         provider_is_live: peakerr.isLive(),
         active_services: services.filter(s => s.active).length
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Overview (field names expected by the admin dashboard UI).
+// Same real computations as /api/admin/dashboard, plus total customer
+// wallet balances (your liability) split by currency.
+app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
+  try {
+    const users = db.getUsers();
+    const orders = db.getOrders();
+    const services = db.getServices(false);
+
+    const settings = db.getSettings();
+    const exchangeRate = settings.exchange_rate_usd_ngn || 1500;
+
+    let totalRevenueNGN = 0;
+    let totalProviderCostNGN = 0;
+    let totalGrossProfitNGN = 0;
+
+    for (const order of orders) {
+      if (order.status !== 'refunded') {
+        const mult = order.currency === 'USDT' ? exchangeRate : 1;
+        totalRevenueNGN += order.customer_charge * mult;
+        totalProviderCostNGN += order.provider_charge * mult;
+        totalGrossProfitNGN += order.net_profit * mult;
+      }
+    }
+
+    // Customer wallet liability: what you owe users if everyone withdrew.
+    // Staff/admin wallets are excluded.
+    let customerBalanceNGN = 0;
+    let customerBalanceUSDT = 0;
+    for (const u of users) {
+      if (u.role !== 'customer') continue;
+      for (const w of db.getWallets(u.id)) {
+        if (w.currency === 'USDT') customerBalanceUSDT += w.available_balance;
+        else customerBalanceNGN += w.available_balance;
+      }
+    }
+
+    // Provider balance is best-effort (upstream can be slow); null = unknown.
+    let providerBalance: number | null = null;
+    let providerCurrency = 'USD';
+    try {
+      const pb = await peakerr.getBalance();
+      if (!pb.error) {
+        providerBalance = pb.balance;
+        providerCurrency = pb.currency || 'USD';
+      }
+    } catch {
+      // leave null - dashboard shows "unknown", never a fake number
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        total_revenue_ngn: roundMoney(totalRevenueNGN),
+        total_provider_cost_ngn: roundMoney(totalProviderCostNGN),
+        total_gross_profit_ngn: roundMoney(totalGrossProfitNGN),
+        total_customer_balance_ngn: roundMoney(customerBalanceNGN),
+        total_customer_balance_usdt: Math.round(customerBalanceUSDT * 100) / 100,
+        orders_count: orders.length,
+        users_count: users.length,
+        services_count: services.filter(s => s.active).length,
+        provider_balance: providerBalance,
+        provider_balance_currency: providerCurrency,
+        provider_is_live: peakerr.isLive()
       }
     });
   } catch (err: any) {

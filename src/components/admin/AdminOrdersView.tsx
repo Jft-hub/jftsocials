@@ -238,11 +238,15 @@ export const AdminOrdersView: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">
-                        ₦{order.provider_cost_ngn?.toLocaleString() || '0'}
+                        {order.currency === 'NGN'
+                          ? `₦${(order.provider_charge ?? 0).toLocaleString()}`
+                          : `${order.provider_charge ?? 0} USDT`}
                       </td>
 
                       <td className="py-3.5 px-3 font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        +₦{order.gross_profit_ngn?.toLocaleString() || '0'}
+                        {order.currency === 'NGN'
+                          ? `+₦${(order.net_profit ?? 0).toLocaleString()}`
+                          : `+${order.net_profit ?? 0} USDT`}
                       </td>
 
                       <td className="py-3.5 px-3 whitespace-nowrap">

@@ -157,15 +157,36 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Customer Wallet Liability - what you owe users if everyone withdrew */}
+      <div className="p-5 rounded-2xl bg-[#0b0f19] border border-amber-500/30 space-y-2">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>Total Customer Wallet Balances (your liability)</span>
+          <Users className="w-4 h-4 text-amber-400" />
+        </div>
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <div className="text-2xl font-bold font-mono text-white">
+            ₦{stats?.total_customer_balance_ngn?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
+          </div>
+          <div className="text-lg font-bold font-mono text-emerald-400">
+            {(stats?.total_customer_balance_usdt ?? 0).toFixed(2)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-400">
+          Sum of all customer wallets across {stats?.users_count || 0} users (staff wallets excluded)
+        </div>
+      </div>
+
       {/* Upstream Provider Balances & Pipeline */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
           <div className="text-xs text-slate-400">Upstream Peakerr Balance</div>
           <div className="text-2xl font-bold font-mono text-white">
-            ${stats?.provider_balance || '5,420.00'} <span className="text-xs text-slate-400 font-normal">USD</span>
+            {stats?.provider_balance === null || stats?.provider_balance === undefined
+              ? <span className="text-slate-500">—</span>
+              : <span>${Number(stats.provider_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>} <span className="text-xs text-slate-400 font-normal">{stats?.provider_balance_currency || 'USD'}</span>
           </div>
           <div className="text-[11px] text-cyan-400">
-            Node status: Responsive (99.9% Uptime)
+            {stats?.provider_is_live ? 'Node status: Live' : 'Node status: Unknown / offline'}
           </div>
         </div>
 
