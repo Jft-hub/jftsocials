@@ -926,7 +926,12 @@ app.get('/api/numbers/products', async (req, res) => {
     const rawProducts = await fiveSim.getProducts(country, operator);
     const settings = db.getSettings();
 
-    const products = Object.entries(rawProducts).map(([name, details]) => {
+    // Only sellable inventory: zero-stock products are hidden so customers
+    // never pay for a number that isn't there (backend double-guard; the
+    // order endpoint rejects Qty 0 independently).
+    const products = Object.entries(rawProducts)
+      .filter(([, details]) => (details.Qty || 0) > 0)
+      .map(([name, details]) => {
       let priceNgn = 0;
       let priceUsdt = 0;
       try {

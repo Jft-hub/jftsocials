@@ -44,8 +44,9 @@ export const VirtualNumbersView: React.FC = () => {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [orders, setOrders] = useState<NumberOrder[]>([]);
 
-  // Selection states
-  const [selectedCountry, setSelectedCountry] = useState<string>('any');
+  // Selection states. Default is Nigeria (real inventory on first paint):
+  // the 5sim guest catalog needs a real country - "any" returns nothing live.
+  const [selectedCountry, setSelectedCountry] = useState<string>('nigeria');
   const [selectedOperator, setSelectedOperator] = useState<string>('any');
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -75,26 +76,42 @@ export const VirtualNumbersView: React.FC = () => {
       .catch(console.error);
   }, []);
 
-  // Fetch products when country or operator changes
+  // Fetch products when country or operator changes, plus a light 60s
+  // refresh while on the buy tab so "available" counts stay truthful.
   useEffect(() => {
-    setLoadingProducts(true);
-    fetch(`/api/numbers/products?country=${selectedCountry}&operator=${selectedOperator}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.products) {
-          setProducts(data.products);
-          // If previous selection is no longer valid, pick the first available
-          if (data.products.length > 0) {
-            const exists = data.products.find((p: ProductItem) => p.name === selectedProduct);
-            if (!exists) {
-              setSelectedProduct(data.products[0].name);
+    let cancelled = false;
+    const loadProducts = () => {
+      setLoadingProducts(true);
+      fetch(`/api/numbers/products?country=${selectedCountry}&operator=${selectedOperator}`)
+        .then(r => r.json())
+        .then(data => {
+          if (cancelled) return;
+          if (data.success && data.products) {
+            setProducts(data.products);
+            // If previous selection is no longer valid, pick the first available
+            if (data.products.length > 0) {
+              const exists = data.products.find((p: ProductItem) => p.name === selectedProduct);
+              if (!exists) {
+                setSelectedProduct(data.products[0].name);
+              }
             }
           }
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoadingProducts(false));
-  }, [selectedCountry, selectedOperator]);
+        })
+        .catch(console.error)
+        .finally(() => {
+          if (!cancelled) setLoadingProducts(false);
+        });
+    };
+    loadProducts();
+    const timer = setInterval(() => {
+      if (activeTab === 'buy') loadProducts();
+    }, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCountry, selectedOperator, activeTab]);
 
   // Fetch past orders
   const fetchOrders = async () => {
@@ -191,6 +208,11 @@ export const VirtualNumbersView: React.FC = () => {
 
     const currentProduct = products.find(p => p.name === selectedProduct);
     if (!currentProduct) return;
+
+    if ((currentProduct.count ?? 0) <= 0) {
+      showToast('This product just ran out of stock. Pick another service.', 'error');
+      return;
+    }
 
     const price = currency === 'USDT' ? currentProduct.price_usdt : currentProduct.price_ngn;
     if (userBalance < price) {
