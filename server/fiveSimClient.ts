@@ -91,21 +91,65 @@ export class FiveSimClient {
     return { balance: profile.balance };
   }
 
+  // Resilient guest cache: 10-minute TTL, serve-stale-on-error.
+  // Upstream hiccups must never hang the numbers pages - worst case the
+  // customer sees prices up to 10 minutes old, never a spinner of death.
+  private guestCache = new Map<string, { at: number; data: any }>();
+  private static readonly GUEST_TTL_MS = 10 * 60 * 1000;
+
+  private getCached(key: string): any | null {
+    const hit = this.guestCache.get(key);
+    if (hit && Date.now() - hit.at < FiveSimClient.GUEST_TTL_MS) return hit.data;
+    return null;
+  }
+
+  private setCached(key: string, data: any): void {
+    try {
+      this.guestCache.set(key, { at: Date.now(), data });
+      // Bound memory: drop entries older than 2x TTL on every write.
+      for (const [k, v] of this.guestCache) {
+        if (Date.now() - v.at > FiveSimClient.GUEST_TTL_MS * 2) this.guestCache.delete(k);
+      }
+    } catch {
+      // cache is best-effort only
+    }
+  }
+
+  private async guestFetch(path: string): Promise<any | null> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(`${this.apiUrl}${path}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) return (await res.json()) as any;
+      return null;
+    } catch {
+      clearTimeout(timeoutId);
+      return null;
+    }
+  }
+
   // country="any" and operator="any" are valid, per the docs
   public async getProducts(
     country: string,
     operator: string = 'any'
   ): Promise<Record<string, { Category: string; Qty: number; Price: number }>> {
-    try {
-      const res = await fetch(`${this.apiUrl}/guest/products/${encodeURIComponent(country)}/${encodeURIComponent(operator)}`, {
-        headers: { Accept: 'application/json' }
-      });
-      if (res.ok) {
-        return (await res.json()) as Record<string, { Category: string; Qty: number; Price: number }>;
-      }
-    } catch {
-      // Fallback
+    const cacheKey = `products:${country}:${operator}`;
+    const cached = this.getCached(cacheKey);
+    // Fast path: fresh cache serves instantly without touching upstream.
+    if (cached) return cached;
+    // Slow path: refresh in background-friendly way (8s cap), fall back to
+    // stale cache of any age, then to the static mock catalog.
+    const fresh = await this.guestFetch(`/guest/products/${encodeURIComponent(country)}/${encodeURIComponent(operator)}`);
+    if (fresh && typeof fresh === 'object') {
+      this.setCached(cacheKey, fresh);
+      return fresh as Record<string, { Category: string; Qty: number; Price: number }>;
     }
+    const stale = this.guestCache.get(cacheKey);
+    if (stale) return stale.data;
 
     // Default institutional mock product catalog if upstream guest API is unreachable
     return {
@@ -121,16 +165,16 @@ export class FiveSimClient {
   }
 
   public async getCountries(): Promise<Record<string, any>> {
-    try {
-      const res = await fetch(`${this.apiUrl}/guest/countries`, {
-        headers: { Accept: 'application/json' }
-      });
-      if (res.ok) {
-        return (await res.json()) as Record<string, any>;
-      }
-    } catch {
-      // Fallback
+    const cacheKey = 'countries';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+    const fresh = await this.guestFetch('/guest/countries');
+    if (fresh && typeof fresh === 'object') {
+      this.setCached(cacheKey, fresh);
+      return fresh as Record<string, any>;
     }
+    const stale = this.guestCache.get(cacheKey);
+    if (stale) return stale.data;
 
     return {
       nigeria: { text: 'Nigeria', prefix: '+234', iso: 'NG' },
