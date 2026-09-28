@@ -44,6 +44,7 @@ interface DatabaseSchema {
   notifications: NotificationItem[];
   audit_logs: AuditLog[];
   settings: SystemSettings;
+  deleted_users?: string[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -306,6 +307,7 @@ class Database {
       support_tickets: this.data.support_tickets || [],
       support_messages: this.data.support_messages || [],
       notifications: this.data.notifications || [],
+      deleted_users: (this.data.deleted_users || []).map((id: string) => ({ id })),
       audit_logs: (this.data.audit_logs || []).map((a: any) => ({
         id: a.id, actor_id: a.actor_id || '', actor_name: a.actor_name || '',
         actor_role: a.actor_role || '', action: a.action || '',
@@ -339,6 +341,17 @@ class Database {
     assign('support_messages', 'support_messages');
     assign('notifications', 'notifications');
     assign('audit_logs', 'audit_logs');
+    const tombs = pick('deleted_users');
+    if (tombs) {
+      const ids = tombs.map((r: any) => r.id).filter(Boolean);
+      if (!this.data.deleted_users) this.data.deleted_users = [];
+      for (const id of ids) {
+        if (!this.data.deleted_users.includes(id)) this.data.deleted_users.push(id);
+      }
+    }
+    // Deletes win: purge anything the tombstones condemn (including rows the
+    // mirror still carries, since upserts can't delete).
+    this.purgeTombstoned();
     if (settings && typeof settings === 'object') {
       this.data.settings = { ...this.data.settings, ...settings };
     }
@@ -386,7 +399,8 @@ class Database {
       support_tickets: this.data.support_tickets?.length || 0,
       support_messages: this.data.support_messages?.length || 0,
       notifications: this.data.notifications?.length || 0,
-      audit_logs: this.data.audit_logs?.length || 0
+      audit_logs: this.data.audit_logs?.length || 0,
+      deleted_users: this.data.deleted_users?.length || 0
     };
   }
 
@@ -410,6 +424,9 @@ class Database {
           }
           if (!parsed.accountOrders) {
             parsed.accountOrders = [];
+          }
+          if (!parsed.deleted_users) {
+            parsed.deleted_users = [];
           }
           if (!parsed.accountCategories.some((c: any) => c.id === 'uk_tiktok')) {
             parsed.accountCategories.push({
@@ -1047,6 +1064,68 @@ class Database {
     };
     this.save();
     return this.data.users[idx];
+  }
+
+  // Full delete: the user record, wallets, ledger entries, notifications and
+  // support threads are removed. Financial rows (orders/payments) are KEPT
+  // with names scrubbed so revenue/profit history stays honest.
+  // The id is tombstoned so redeploys and mirror restores never resurrect it.
+  public deleteUser(id: string): { ordersKept: number } | null {
+    const idx = this.data.users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+    this.data.users.splice(idx, 1);
+
+    this.data.wallets = this.data.wallets.filter(w => w.user_id !== id);
+    this.data.wallet_transactions = this.data.wallet_transactions.filter(t => t.user_id !== id);
+    this.data.notifications = this.data.notifications.filter(n => n.user_id !== id);
+
+    const ticketIds = new Set(
+      (this.data.support_tickets || []).filter(t => t.user_id === id).map(t => t.id)
+    );
+    this.data.support_tickets = (this.data.support_tickets || []).filter(t => t.user_id !== id);
+    this.data.support_messages = (this.data.support_messages || []).filter(m => !ticketIds.has(m.ticket_id));
+
+    let kept = 0;
+    for (const o of this.data.orders || []) {
+      if (o.user_id === id) {
+        o.user_name = 'Deleted User';
+        o.user_email = '';
+        kept++;
+      }
+    }
+    for (const p of this.data.payments || []) {
+      if (p.user_id === id) {
+        p.user_name = 'Deleted User';
+        p.user_email = '';
+      }
+    }
+
+    if (!this.data.deleted_users) this.data.deleted_users = [];
+    if (!this.data.deleted_users.includes(id)) this.data.deleted_users.push(id);
+
+    this.save();
+    return { ordersKept: kept };
+  }
+
+  // Re-applies tombstones (used after mirror restores so deleted users stay gone).
+  public purgeTombstoned(): number {
+    const tomb = this.data.deleted_users || [];
+    if (tomb.length === 0) return 0;
+    const set = new Set(tomb);
+    const before =
+      this.data.users.length + this.data.wallets.length + this.data.wallet_transactions.length;
+    this.data.users = this.data.users.filter(u => !set.has(u.id));
+    this.data.wallets = this.data.wallets.filter(w => !set.has(w.user_id));
+    this.data.wallet_transactions = this.data.wallet_transactions.filter(t => !set.has(t.user_id));
+    this.data.notifications = this.data.notifications.filter(n => !set.has(n.user_id));
+    const ticketIds = new Set(
+      (this.data.support_tickets || []).filter(t => set.has(t.user_id)).map(t => t.id)
+    );
+    this.data.support_tickets = (this.data.support_tickets || []).filter(t => !set.has(t.user_id));
+    this.data.support_messages = (this.data.support_messages || []).filter(m => !ticketIds.has(m.ticket_id));
+    const after =
+      this.data.users.length + this.data.wallets.length + this.data.wallet_transactions.length;
+    return before - after;
   }
 
   // --- WALLET & LEDGER ---

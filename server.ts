@@ -1850,6 +1850,63 @@ app.post('/api/admin/users/:id/role', verifyAdmin, (req: AuthenticatedRequest, r
   res.json({ success: true, user: updated });
 });
 
+// Full user delete. Financial rows are kept (names scrubbed) so the books
+// stay honest; everything else is removed and tombstoned.
+app.delete('/api/admin/users/:id', verifyAdmin, (req: AuthenticatedRequest, res) => {
+  const admin = req.user!;
+
+  if (req.params.id === admin.id) {
+    return res.status(400).json({ success: false, error: 'You cannot delete your own account.' });
+  }
+
+  const target = db.findUserById(req.params.id);
+  if (!target) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  if (['admin', 'superadmin'].includes(target.role)) {
+    const remainingStaff = db.getUsers().filter(
+      u => u.id !== target.id && ['admin', 'superadmin', 'manager'].includes(u.role)
+    ).length;
+    if (remainingStaff === 0) {
+      return res.status(400).json({ success: false, error: 'Cannot delete the last staff account.' });
+    }
+  }
+
+  const balances = db.getWallets(target.id);
+  const owed = balances.reduce((sum, w) => sum + (w.available_balance || 0), 0);
+  if (owed > 0 && req.body?.force !== true) {
+    return res.status(400).json({
+      success: false,
+      error: `This user still holds ${owed.toLocaleString()} across wallets. Zero it first (adjust-wallet) or retry with force to forfeit it.`,
+      non_zero_balance: owed
+    });
+  }
+
+  const result = db.deleteUser(target.id);
+  if (!result) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  // Kick every live session of the deleted user immediately.
+  for (const [token, uid] of activeSessions) {
+    if (uid === target.id) activeSessions.delete(token);
+  }
+
+  db.addAuditLog({
+    actor_id: admin.id,
+    actor_name: admin.name,
+    actor_role: admin.role,
+    action: 'DELETE_USER',
+    entity_type: 'user',
+    entity_id: target.id,
+    details: `Permanently deleted ${target.email} (${result.ordersKept} orders kept anonymized)`,
+    ip: req.ip || '127.0.0.1'
+  });
+
+  res.json({ success: true, orders_kept: result.ordersKept });
+});
+
 // Admin Manual Wallet Adjustment
 app.post('/api/admin/users/:id/adjust-wallet', verifyAdmin, (req: AuthenticatedRequest, res) => {
   try {

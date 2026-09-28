@@ -44,6 +44,7 @@ const TABLES: Array<keyof Omit<MirrorSnapshot, 'settings'>> = [
   'support_messages',
   'notifications',
   'audit_logs',
+  'deleted_users',
 ];
 
 let disabledLogged = false;

@@ -30,6 +30,57 @@ export const AdminUsersView: React.FC = () => {
     fetchUsers();
   }, [token]);
 
+  const walletBalance = (u: any, currency: string): number => {
+    const w = (u.wallets || []).find((x: any) => x.currency === currency);
+    return typeof w?.available_balance === 'number' ? w.available_balance : 0;
+  };
+
+  const handleStatusChange = async (userId: string, email: string, suspend: boolean) => {
+    if (!token) return;
+    const action = suspend ? 'blacklist (suspend)' : 'un-suspend';
+    if (!window.confirm(`Are you sure you want to ${action} ${email}?${suspend ? ' They will be logged out everywhere and blocked from logging in.' : ''}`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: suspend ? 'suspended' : 'active' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`User ${suspend ? 'blacklisted' : 'restored'} successfully.`, 'success');
+        fetchUsers();
+      } else {
+        showToast(data.error || 'Failed to update status.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleDelete = async (userId: string, email: string) => {
+    if (!token) return;
+    if (!window.confirm(`PERMANENTLY delete ${email}?\n\nWallets, ledger, tickets and notifications are removed. Past orders stay in the books anonymized. This cannot be undone.`)) return;
+    if (!window.confirm(`Final confirmation: erase ${email} completely?`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('User permanently deleted.', 'success');
+        fetchUsers();
+      } else {
+        showToast(data.error || 'Failed to delete user.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
   const handleRoleChange = async (userId: string, newRole: string) => {
     if (!token) return;
     try {
@@ -99,15 +150,15 @@ export const AdminUsersView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400 uppercase text-[10px] tracking-wider font-semibold">
-              <tr>
-                <th className="py-3 px-4">User</th>
-                <th className="py-3 px-4">Email</th>
-                <th className="py-3 px-4">Role</th>
-                <th className="py-3 px-4">NGN Balance</th>
-                <th className="py-3 px-4">USDT Balance</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Role Assignment</th>
-              </tr>
+                <tr>
+                  <th className="py-3 px-4">User</th>
+                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">NGN Balance</th>
+                  <th className="py-3 px-4">USDT Balance</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {filtered.map(u => (
@@ -132,31 +183,65 @@ export const AdminUsersView: React.FC = () => {
                   </td>
 
                   <td className="py-3.5 px-4 font-mono font-bold text-white whitespace-nowrap">
-                    ₦{u.ngn_balance?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
+                    ₦{walletBalance(u, 'NGN').toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
 
                   <td className="py-3.5 px-4 font-mono font-bold text-emerald-400 whitespace-nowrap">
-                    {u.usdt_balance?.toFixed(2) || '0.00'} USDT
+                    {walletBalance(u, 'USDT').toFixed(2)} USDT
                   </td>
 
                   <td className="py-3.5 px-4 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Active
-                    </span>
+                    {u.status === 'suspended' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-rose-400 font-bold uppercase">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                        Blacklisted
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Active
+                      </span>
+                    )}
                   </td>
 
                   <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                    <select
-                      value={u.role}
-                      onChange={e => handleRoleChange(u.id, e.target.value)}
-                      className="bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-[11px] focus:outline-none"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="manager">Manager</option>
-                      <option value="admin">Administrator</option>
-                      <option value="superadmin">Super Admin</option>
-                    </select>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <select
+                        value={u.role}
+                        onChange={e => handleRoleChange(u.id, e.target.value)}
+                        className="bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-[11px] focus:outline-none"
+                        title="Change role"
+                      >
+                        <option value="customer">Customer</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Administrator</option>
+                        <option value="superadmin">Super Admin</option>
+                      </select>
+                      {u.status === 'suspended' ? (
+                        <button
+                          onClick={() => handleStatusChange(u.id, u.email, false)}
+                          className="px-2 py-1 rounded bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 text-[11px] font-semibold transition cursor-pointer"
+                          title="Remove blacklist"
+                        >
+                          Unban
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStatusChange(u.id, u.email, true)}
+                          className="px-2 py-1 rounded bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-300 text-[11px] font-semibold transition cursor-pointer"
+                          title="Blacklist (suspend login)"
+                        >
+                          Blacklist
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(u.id, u.email)}
+                        className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-[11px] font-semibold transition cursor-pointer"
+                        title="Permanently delete user"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

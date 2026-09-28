@@ -34,6 +34,7 @@ const MIRROR_TABLES = [
   'support_messages',
   'notifications',
   'audit_logs',
+  'deleted_users',
 ];
 
 // Tables whose growth proves the mirror is newer. Catalog-ish small tables
@@ -49,6 +50,7 @@ const GROWTH_TABLES = [
   'support_tickets',
   'support_messages',
   'notifications',
+  'deleted_users',
 ];
 
 const RESTORE_TIMEOUT_MS = 25000;
@@ -79,8 +81,10 @@ async function downloadTable(url: string, key: string, table: string): Promise<a
   const rows: any[] = [];
   let offset = 0;
   for (let page = 0; page < 25; page++) {
+    // No ORDER BY: tables are wholesale-replaced and small, and not every
+    // table (e.g. deleted_users) has a created_at column.
     const res = await fetch(
-      `${url}/rest/v1/${table}?select=*&order=created_at&limit=${PAGE_SIZE}&offset=${offset}`,
+      `${url}/rest/v1/${table}?select=*&limit=${PAGE_SIZE}&offset=${offset}`,
       { headers: headers(key) }
     );
     if (!res.ok) throw new Error(`${table} download -> HTTP ${res.status}`);
