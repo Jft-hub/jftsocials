@@ -181,9 +181,9 @@ export const LandingPage: React.FC = () => {
               <div className="w-10 h-10 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center">
                 <TrendingUp className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-bold text-white font-display">Transparent Pricing Engine</h3>
+              <h3 className="text-lg font-bold text-white font-display">Clear Upfront Pricing</h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Enforces a strict ₦2,000 minimum platform profit protection on all orders with clear payment fee accounting (3% deposit fee clearly segregated).
+                One total price shown before you pay — no hidden fees, no surprises. Small orders stay affordable with friendly micro pricing.
               </p>
             </div>
 

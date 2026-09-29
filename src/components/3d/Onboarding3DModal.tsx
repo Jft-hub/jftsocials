@@ -21,7 +21,7 @@ export const Onboarding3DModal: React.FC = () => {
       title: 'Autonomous Live Tracking & Margins',
       subtitle: 'Real-time synchronization without manual refresh',
       description:
-        'Watch your start counts, live remaining balance, and automated 30-day refills in real-time. Built with a strict ₦2,000 platform margin floor and protected server-side accounting.',
+        'Watch your start counts, live remaining balance, and automated refills in real-time, all calculated securely on our servers.',
       icon: ShieldCheck,
       badge: 'Step 2 of 3 — Live Reliability'
     },

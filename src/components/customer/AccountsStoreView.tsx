@@ -46,7 +46,7 @@ export const AccountsStoreView: React.FC = () => {
   const [copiedAll, setCopiedAll] = useState(false);
 
   const ngnWallet = wallets.find(w => w.currency === 'NGN');
-  const ngnBalance = ngnWallet ? ngnWallet.balance : 0;
+  const ngnBalance = typeof ngnWallet?.available_balance === 'number' ? ngnWallet.available_balance : 0;
 
   const fetchCategories = async () => {
     try {
