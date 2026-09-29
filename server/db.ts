@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   five_sim_rate_to_ngn: 0,
   five_sim_markup_percentage: 50,
   fivesim_key_configured: false,
+  herosms_api_url: 'https://hero-sms.com/stubs/handler_api.php',
+  herosms_key_configured: false,
   sync_interval_minutes: 10,
   low_balance_threshold_usd: 25.0
 };
@@ -257,6 +259,7 @@ class Database {
       'eagainsmedia_api_url', 'eagainsmedia_key_configured', 'eagainsmedia_api_key_encrypted',
       'five_sim_rate_to_ngn', 'five_sim_markup_percentage',
       'fivesim_key_configured', 'fivesim_api_key_encrypted',
+      'herosms_api_url', 'herosms_key_configured', 'herosms_api_key_encrypted',
       'sync_interval_minutes', 'low_balance_threshold_usd'
     ];
     for (const c of SETTING_COLS) {
@@ -948,6 +951,9 @@ class Database {
       } else if (pId === 'fivesim' || pId === '5sim') {
         delete this.data.settings.fivesim_api_key_encrypted;
         this.data.settings.fivesim_key_configured = false;
+      } else if (pId === 'herosms' || pId === 'hero') {
+        delete this.data.settings.herosms_api_key_encrypted;
+        this.data.settings.herosms_key_configured = false;
       }
       this.save();
       return;
@@ -963,6 +969,9 @@ class Database {
     } else if (pId === 'fivesim' || pId === '5sim') {
       this.data.settings.fivesim_api_key_encrypted = encrypted;
       this.data.settings.fivesim_key_configured = true;
+    } else if (pId === 'herosms' || pId === 'hero') {
+      this.data.settings.herosms_api_key_encrypted = encrypted;
+      this.data.settings.herosms_key_configured = true;
     }
     this.save();
 
@@ -987,6 +996,8 @@ class Database {
       encrypted = this.data.settings.eagainsmedia_api_key_encrypted;
     } else if (pId === 'fivesim' || pId === '5sim') {
       encrypted = this.data.settings.fivesim_api_key_encrypted;
+    } else if (pId === 'herosms' || pId === 'hero') {
+      encrypted = this.data.settings.herosms_api_key_encrypted;
     }
     if (!encrypted) return null;
 
@@ -1001,6 +1012,8 @@ class Database {
             this.data.settings.eagainsmedia_api_key_encrypted = reEncrypted;
           } else if (pId === 'fivesim' || pId === '5sim') {
             this.data.settings.fivesim_api_key_encrypted = reEncrypted;
+          } else if (pId === 'herosms' || pId === 'hero') {
+            this.data.settings.herosms_api_key_encrypted = reEncrypted;
           }
           this.save();
         } catch {

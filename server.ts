@@ -7,6 +7,7 @@ import { db, hashPassword, verifyPassword, encryptSecret, decryptSecret } from '
 import { PeakerrClient, ServiceProvider } from './server/peakerrClient.js';
 import { EagainsmediaClient } from './server/eagainsmediaClient.js';
 import { FiveSimClient } from './server/fiveSimClient.js';
+import { HeroSmsClient } from './server/heroSmsClient.js';
 import { calculateOrderPrice, calculateNumberPrice, roundMoney } from './server/pricingEngine.js';
 import { AutomationEngine } from './server/automation.js';
 import { User, Currency, NumberOrder, AccountCategory, AccountListing, AccountOrder } from './src/types/index.js';
@@ -102,6 +103,19 @@ if (persistedFiveSimKey) {
   console.log('[Startup] Loaded 5sim API key from persisted settings.');
 } else if (process.env.FIVESIM_API_KEY) {
   console.log('[Startup] Loaded 5sim API key from environment variable.');
+}
+
+// HeroSMS second numbers lane (spends nothing until the buy flow is wired;
+// key + Test button work from this deploy).
+const persistedHeroKey = db.getProviderApiKey('herosms');
+const initialHeroUrl = (db.getSettings() as any).herosms_api_url || process.env.HEROSMS_API_URL || '';
+const heroSms = new HeroSmsClient(persistedHeroKey || process.env.HEROSMS_API_KEY || '', initialHeroUrl || undefined);
+if (persistedHeroKey) {
+  console.log('[Startup] Loaded HeroSMS API key from persisted settings.');
+} else if (process.env.HEROSMS_API_KEY) {
+  console.log('[Startup] Loaded HeroSMS API key from environment variable.');
+} else {
+  console.info('[Startup] No HeroSMS API key configured - 5sim remains the only numbers lane.');
 }
 
 function getProviderClient(providerId?: string): ServiceProvider {
@@ -2659,6 +2673,16 @@ const handleUpdateSettings = (req: AuthenticatedRequest, res: any) => {
     delete updates.fivesim_api_key;
   }
 
+  if (updates.herosms_api_key) {
+    heroSms.setApiKey(updates.herosms_api_key);
+    db.saveProviderApiKey('herosms', updates.herosms_api_key, admin, req.ip || '127.0.0.1');
+    delete updates.herosms_api_key;
+  }
+
+  if (updates.herosms_api_url) {
+    heroSms.setApiUrl(updates.herosms_api_url);
+  }
+
   // Backward compatibility: older admin clients saved several settings
   // under different names (pricing page, settings page). Map them to the
   // canonical keys consumed by the pricing engine (server/pricingEngine.ts),
@@ -2684,6 +2708,7 @@ const handleUpdateSettings = (req: AuthenticatedRequest, res: any) => {
     peakerr_api_key_encrypted,
     eagainsmedia_api_key_encrypted,
     fivesim_api_key_encrypted,
+    herosms_api_key_encrypted,
     ...safeSettings
   } = updated;
   res.json({ success: true, settings: safeSettings });
@@ -2709,6 +2734,10 @@ app.post('/api/admin/provider/test', verifyAdmin, async (req, res) => {
       providerLabel = '5';
       is_live = fiveSim.isLive();
       balance = await fiveSim.getBalance();
+    } else if (providerName === 'herosms' || providerName === 'hero') {
+      providerLabel = 'Hero';
+      is_live = heroSms.isLive();
+      balance = await heroSms.getBalance();
     } else {
       is_live = peakerr.isLive();
       balance = await peakerr.getBalance();

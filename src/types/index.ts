@@ -240,7 +240,8 @@ export type NumberOrderStatus = 'PENDING' | 'RECEIVED' | 'CANCELED' | 'TIMEOUT' 
 export interface NumberOrder {
   id: string;                    // our internal id
   user_id: string;
-  provider_order_id: number;     // 5sim's order id
+  provider?: string;             // 'fivesim' (default) | 'herosms'
+  provider_order_id: number;     // upstream order id
   country: string;
   operator: string;
   product: string;               // e.g. "facebook", "whatsapp"
@@ -284,6 +285,9 @@ export interface SystemSettings {
   five_sim_markup_percentage: number; // e.g. 50 for +50%
   fivesim_key_configured?: boolean;
   fivesim_api_key_encrypted?: string;
+  herosms_api_url?: string;
+  herosms_key_configured?: boolean;
+  herosms_api_key_encrypted?: string;
   sync_interval_minutes: number;
   low_balance_threshold_usd: number;
 }
