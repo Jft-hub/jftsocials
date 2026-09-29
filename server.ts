@@ -1112,15 +1112,19 @@ app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: Authentic
       activation = await fiveSim.buyActivation(country, operator, product);
     } catch (providerErr: any) {
       // Refund wallet immediately if provider purchase failed
+      const reason = providerErr.message || 'Provider error';
       db.creditWallet(
         user.id,
         orderCurrency,
         pricing.customerPrice,
         'refund',
         `REF-${orderId}`,
-        `Refund: Failed order for ${product} (${providerErr.message || 'Provider error'})`
+        `Refund: Failed order for ${product} (${reason})`
       );
-      return res.status(500).json({ success: false, error: `Failed to acquire number: ${providerErr.message || 'Provider error'}` });
+      // Stock/balance rejections are the customer's cue to pick another
+      // route (400), not a server crash (500).
+      const friendly = /no free numbers|out of stock|too low/i.test(reason);
+      return res.status(friendly ? 400 : 500).json({ success: false, error: friendly ? reason : `Failed to acquire number: ${reason}` });
     }
 
     // 5. Store NumberOrder in database

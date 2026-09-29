@@ -76,7 +76,21 @@ export class FiveSimClient {
         const text = await response.text().catch(() => '');
         throw new Error(`5sim API error (${response.status}): ${text || response.statusText}`);
       }
-      return (await response.json()) as T;
+      // 5sim sometimes answers errors as plain text (e.g. "no free phones")
+      // instead of JSON. Translate those into human errors, never raw dumps.
+      const rawText = await response.text();
+      try {
+        return JSON.parse(rawText) as T;
+      } catch {
+        const lowered = rawText.toLowerCase();
+        if (lowered.includes('no free')) {
+          throw new Error('No free numbers right now for this route. Try another country or product.');
+        }
+        if (lowered.includes('not enough') || lowered.includes('balance')) {
+          throw new Error('5sim balance too low for this activation. Top up on 5sim.net.');
+        }
+        throw new Error(`5sim error: ${rawText.slice(0, 120)}`);
+      }
     } catch (err: any) {
       clearTimeout(timeoutId);
       throw new Error(`5sim request failed: ${err.message || err}`);
