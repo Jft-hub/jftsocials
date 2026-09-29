@@ -46,15 +46,15 @@ export const AdminPricingView: React.FC = () => {
       .catch(console.error);
   }, [token]);
 
-  // Live Calculator Logic
+  // Live Calculator Logic (mirrors the live v4 engine rule exactly)
   useEffect(() => {
     const providerCost = (calcProviderRate * calcQuantity) / 1000;
-    const percentageProfit = (providerCost * markupPercent) / 100;
-    const floorProfit = minMarkupNGN;
-    const isFloorApplied = floorProfit > percentageProfit;
-    const grossProfit = Math.max(percentageProfit, floorProfit);
-    const finalSellingPrice = providerCost + grossProfit;
-    const effectiveMargin = providerCost > 0 ? (grossProfit / finalSellingPrice) * 100 : 0;
+    const percentageProfit = providerCost * 0.3;
+    const floorProfit = 51;
+    const isFloorApplied = providerCost < 50;
+    const grossProfit = isFloorApplied ? 51 - providerCost : percentageProfit;
+    const finalSellingPrice = isFloorApplied ? 51 : providerCost + percentageProfit;
+    const effectiveMargin = finalSellingPrice > 0 ? (grossProfit / finalSellingPrice) * 100 : 0;
 
     setCalcResult({
       providerCost,
@@ -66,7 +66,7 @@ export const AdminPricingView: React.FC = () => {
       effectiveMargin,
       priceInUSDT: finalSellingPrice / usdtRate
     });
-  }, [calcProviderRate, calcQuantity, markupPercent, minMarkupNGN, usdtRate]);
+  }, [calcProviderRate, calcQuantity, usdtRate]);
 
   // Save Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -109,7 +109,7 @@ export const AdminPricingView: React.FC = () => {
             Rule of Truth
           </span>
           <span className="text-xs font-mono text-cyan-400">
-            Selling Price = Provider Cost + MAX(50%, ₦2,000)
+            Selling Price = ₦51 flat under ₦50, else Provider Cost + 30%
           </span>
         </div>
         <h1 className="text-2xl font-bold font-display text-white mt-1">
@@ -176,16 +176,16 @@ export const AdminPricingView: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center text-slate-300">
-                  <span>2. Calculated {markupPercent}% Markup:</span>
+                  <span>2. Standard 30% Markup:</span>
                   <span className="font-mono text-slate-300">
                     ₦{calcResult.percentageProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-slate-300">
-                  <span>3. Platform Profit Floor:</span>
+                  <span>3. Micro-Order Floor:</span>
                   <span className="font-mono text-indigo-300 font-semibold">
-                    ₦{calcResult.floorProfit.toLocaleString()}
+                    ₦51 flat under ₦50
                   </span>
                 </div>
 
@@ -201,7 +201,7 @@ export const AdminPricingView: React.FC = () => {
                       +₦{calcResult.grossProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </div>
                     <div className="text-[10px] text-cyan-400 font-semibold">
-                      {calcResult.isFloorApplied ? '₦2,000 Minimum Floor Applied' : '50% Percentage Markup Applied'}
+                      {calcResult.isFloorApplied ? '₦51 Micro Floor Applied' : '30% Standard Markup Applied'}
                     </div>
                   </div>
                 </div>
@@ -239,41 +239,14 @@ export const AdminPricingView: React.FC = () => {
             <h2 className="text-base font-bold font-display text-white">Global Pricing Parameters</h2>
           </div>
 
+          <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
+            <span className="font-bold text-white">Live pricing rule:</span> totals under ₦50 sell
+            flat at <span className="font-mono font-bold text-white">₦51</span>; totals ₦50+ carry{' '}
+            <span className="font-mono font-bold text-white">+30%</span>. Customers only ever see the
+            final total. USDT totals convert at the rate below.
+          </div>
+
           <form onSubmit={handleSaveSettings} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Default Markup Percentage (%)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={500}
-                required
-                value={markupPercent}
-                onChange={e => setMarkupPercent(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">Default is 20% above P costs.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Minimum Platform Margin Floor (₦)
-              </label>
-              <input
-                type="number"
-                min={500}
-                step={100}
-                required
-                value={minMarkupNGN}
-                onChange={e => setMinMarkupNGN(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Guarantees at least ₦2,000 profit on every single order.
-              </p>
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 USDT to NGN Exchange Rate

@@ -99,6 +99,12 @@ export const AdminOrdersView: React.FC = () => {
     }
   };
 
+  const statusCounts = orders.reduce((acc: Record<string, number>, o: any) => {
+    acc[o.status] = (acc[o.status] || 0) + 1;
+    return acc;
+  }, {});
+  const STATUS_TABS = ['all', 'pending', 'processing', 'in_progress', 'partial', 'completed', 'cancelled', 'failed', 'refunded'];
+
   const filteredOrders = orders.filter(o => {
     const rawLink = (o.link || (o as any).target_link || '').toLowerCase();
     const matchesSearch =
@@ -134,7 +140,7 @@ export const AdminOrdersView: React.FC = () => {
       {/* Filter & Search Bar */}
       <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-          {['all', 'in_progress', 'completed', 'pending', 'cancelled', 'refunded'].map(st => (
+          {STATUS_TABS.map(st => (
             <button
               key={st}
               onClick={() => setFilterStatus(st)}
@@ -142,7 +148,7 @@ export const AdminOrdersView: React.FC = () => {
                 filterStatus === st ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {st.replace('_', ' ').toUpperCase()}
+              {st.replace('_', ' ').toUpperCase()} ({st === 'all' ? orders.length : (statusCounts[st] || 0)})
             </button>
           ))}
         </div>

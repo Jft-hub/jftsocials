@@ -16,13 +16,14 @@ export interface PricingOptions {
 }
 
 /**
- * JFT Socials Core Pricing & Profit Engine
+ * JFT Socials Core Pricing & Profit Engine (rule v4)
  *
- * Implements the mathematical requirement:
  * Provider Cost = (Provider Rate in NGN * Customer Quantity) / 1000
- * Calculated Percentage Markup = Provider Cost * (Markup% / 100) [Default 20%]
- * Required Markup = MAX(Calculated Percentage Markup, Min Margin Target) [Default ₦10]
- * Final Customer Price = Provider Cost + Required Markup
+ * Final Customer Price:
+ *   - Base below ₦50  -> flat ₦51 total (micro-transactions stay worthwhile)
+ *   - Base ₦50 or more -> base + 30%
+ * The base is the provider cost (or the service custom price when set).
+ * Customers only ever see the final total, never the added margin.
  */
 export function calculateOrderPrice(options: PricingOptions): PriceCalculationResult {
   const { service, category, quantity, currency, settings } = options;
@@ -34,32 +35,30 @@ export function calculateOrderPrice(options: PricingOptions): PriceCalculationRe
   const rateInNGN = service.provider_rate;
   let providerCostNGN = roundMoney((rateInNGN * quantity) / 1000);
 
-  // 2. Determine markup percentage: Service Override > Category Override > Global Default
-  let markupPercentage = settings.default_markup_percentage;
-  if (service.markup_percentage_override !== undefined && service.markup_percentage_override !== null) {
-    markupPercentage = service.markup_percentage_override;
+  // Base figure: service custom price when set, otherwise the provider cost.
+  // (Legacy markup/floor settings are intentionally not consulted: the v4
+  // rule below is the single pricing law.)
+  const markupPercentage = 30;
+  const minMarginNGN = 51;
+  let baseNGN: number;
+  if (service.custom_price && service.custom_price > 0) {
+    baseNGN = roundMoney((service.custom_price * quantity) / 1000);
+  } else {
+    baseNGN = providerCostNGN;
   }
 
-  // 3. Determine minimum margin: Service Override > Category Override > Global Default
-  let minMarginNGN = settings.default_min_margin_ngn;
-  if (service.min_margin_override !== undefined && service.min_margin_override !== null) {
-    minMarginNGN = service.min_margin_override;
-  }
-
-  // Check if a fixed custom selling price exists for this service (per 1,000 units in NGN)
+  // JFT rule v4, applied BEFORE the price is rendered anywhere.
   let customerPriceNGN: number;
   let appliedMarkupNGN: number;
-  // Standard JFT Socials markup: Adds 20% on the initial provider cost (no fixed 2000 floor)
-  let calculatedPercentMarkupNGN = roundMoney(providerCostNGN * (markupPercentage / 100));
-
-  if (service.custom_price && service.custom_price > 0) {
-    // Custom price override
-    customerPriceNGN = roundMoney((service.custom_price * quantity) / 1000);
+  let calculatedPercentMarkupNGN: number;
+  if (baseNGN < 50) {
+    customerPriceNGN = 51;
+    calculatedPercentMarkupNGN = roundMoney(baseNGN * 0.30);
     appliedMarkupNGN = roundMoney(customerPriceNGN - providerCostNGN);
   } else {
-    // Pure percentage markup (default 20%) without pressed 2000 floor
-    appliedMarkupNGN = calculatedPercentMarkupNGN;
-    customerPriceNGN = roundMoney(providerCostNGN + appliedMarkupNGN);
+    calculatedPercentMarkupNGN = roundMoney(baseNGN * 0.30);
+    customerPriceNGN = roundMoney(baseNGN + calculatedPercentMarkupNGN);
+    appliedMarkupNGN = roundMoney(customerPriceNGN - providerCostNGN);
   }
 
   // Calculate gross margin in NGN
@@ -124,7 +123,7 @@ export function calculateOrderPrice(options: PricingOptions): PriceCalculationRe
     effective_profit_percentage: effectiveProfitPercentage,
     currency,
     exchange_rate_used: exchangeRate,
-    pricing_rule_version: 'v3.0-percent-markup-20'
+    pricing_rule_version: 'v4.0-floor51-plus30'
   };
 }
 

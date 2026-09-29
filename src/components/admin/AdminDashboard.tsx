@@ -124,7 +124,7 @@ export const AdminDashboard: React.FC = () => {
             ₦{stats?.total_gross_profit_ngn?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
           </div>
           <div className="text-[11px] text-emerald-400 font-medium">
-            ₦{(stats?.min_margin_ngn ?? 10).toLocaleString()} minimum margin floor enforced
+            ₦51 micro floor • +30% standard markup
           </div>
         </div>
 

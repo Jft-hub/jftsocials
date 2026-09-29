@@ -1756,7 +1756,9 @@ app.get('/api/admin/dashboard', verifyAdmin, async (req, res) => {
     const exchangeRate = settings.exchange_rate_usd_ngn || 1500;
 
     for (const order of orders) {
-      if (order.status !== 'refunded') {
+      // Successful business only: completed (and partial) deliveries.
+      // Processing, failed, cancelled and refunded orders never touch revenue.
+      if (order.status === 'completed' || order.status === 'partial') {
         const mult = order.currency === 'USDT' ? exchangeRate : 1;
         totalRevenueNGN += order.customer_charge * mult;
         totalProviderCostNGN += order.provider_charge * mult;
@@ -1809,7 +1811,8 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
     let totalGrossProfitNGN = 0;
 
     for (const order of orders) {
-      if (order.status !== 'refunded') {
+      // Successful business only: completed (and partial) deliveries.
+      if (order.status === 'completed' || order.status === 'partial') {
         const mult = order.currency === 'USDT' ? exchangeRate : 1;
         totalRevenueNGN += order.customer_charge * mult;
         totalProviderCostNGN += order.provider_charge * mult;
@@ -2019,6 +2022,51 @@ app.delete('/api/admin/users/:id', verifyAdmin, (req: AuthenticatedRequest, res)
   });
 
   res.json({ success: true, orders_kept: result.ordersKept });
+});
+
+// Admin order status change (from the Orders Control Center dropdown).
+// Refunds are NOT allowed here - they must go through the refund flow.
+app.post('/api/admin/orders/:id/status', verifyAdmin, (req: AuthenticatedRequest, res) => {
+  const admin = req.user!;
+  const { status } = req.body;
+  const allowed = ['pending', 'processing', 'in_progress', 'completed', 'partial', 'cancelled'];
+
+  if (!status || !allowed.includes(status)) {
+    return res.status(400).json({ success: false, error: 'Valid status is required (refunds use the Refund button).' });
+  }
+
+  const order = db.findOrderById(req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: 'Order not found' });
+  }
+
+  const updated = db.updateOrder(order.id, { status: status as any });
+
+  db.addAuditLog({
+    actor_id: admin.id,
+    actor_name: admin.name,
+    actor_role: admin.role,
+    action: 'UPDATE_ORDER_STATUS',
+    entity_type: 'order',
+    entity_id: order.id,
+    details: `Changed order ${order.id} status from ${order.status} to ${status}`,
+    ip: req.ip || '127.0.0.1'
+  });
+
+  res.json({ success: true, order: updated });
+});
+
+// Admin manual full order-status sync with providers (dashboard button).
+app.post('/api/admin/orders/sync-all', verifyAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    await automation.runOrderSync();
+    const actives = db.getOrders().filter(o =>
+      ['pending', 'processing', 'in_progress'].includes(o.status)
+    ).length;
+    res.json({ success: true, message: `Sync pass complete. ${actives} orders still active.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Admin Manual Wallet Adjustment
