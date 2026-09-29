@@ -64,6 +64,25 @@ export const WalletView: React.FC = () => {
     fetchTransactions();
   }, [token]);
 
+  // Paystack SDK loads on demand (first deposit attempt only), never on page load.
+  const ensurePaystackLoaded = (): Promise<void> => {
+    if (typeof (window as any).PaystackPop !== 'undefined') return Promise.resolve();
+    if (!(window as any).__paystackLoading) {
+      (window as any).__paystackLoading = new Promise<void>((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://js.paystack.co/v1/inline.js';
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => {
+          (window as any).__paystackLoading = null;
+          reject(new Error('Paystack SDK failed to load. Check your connection and retry.'));
+        };
+        document.head.appendChild(s);
+      });
+    }
+    return (window as any).__paystackLoading;
+  };
+
   // Handle Paystack Deposit
   const handlePaystackDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +98,10 @@ export const WalletView: React.FC = () => {
       return;
     }
 
-    if (typeof (window as any).PaystackPop === 'undefined') {
-      showToast('Payment SDK failed to load. Please refresh the page and try again.', 'error');
+    try {
+      await ensurePaystackLoaded();
+    } catch (sdkErr: any) {
+      showToast(sdkErr.message || 'Payment SDK failed to load. Please try again.', 'error');
       return;
     }
 

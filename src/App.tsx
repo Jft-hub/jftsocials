@@ -10,32 +10,46 @@ const Onboarding3DModal = lazy(() =>
 import { AuthModal } from './components/auth/AuthModal.js';
 import { ErrorBoundary } from './components/common/ErrorBoundary.js';
 
+// Route-level code splitting: every view below downloads only when first
+// opened. The shell (nav, sidebar, auth, toasts) stays in the entry bundle
+// so first paint is a fraction of the old 1.4MB download. three.js and
+// recharts ride inside their views' chunks, never the landing bundle.
+const lazyView = <T extends React.ComponentType<any>>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
+  lazy(() => loader().then(m => ({ default: m[name] as T })));
+
 // Public Views
-import { LandingPage } from './components/public/LandingPage.js';
+const LandingPage = lazyView(() => import('./components/public/LandingPage.js'), 'LandingPage');
 
 // Customer Views
-import { CustomerDashboard } from './components/customer/CustomerDashboard.js';
-import { NewOrderView } from './components/customer/NewOrderView.js';
-import { VirtualNumbersView } from './components/customer/VirtualNumbersView.js';
-import { OrdersView } from './components/customer/OrdersView.js';
-import { ServicesView } from './components/customer/ServicesView.js';
-import { WalletView } from './components/customer/WalletView.js';
-import { SupportView } from './components/customer/SupportView.js';
-import { ProfileView } from './components/customer/ProfileView.js';
-import { AccountsStoreView } from './components/customer/AccountsStoreView.js';
-import { MyAccountsView } from './components/customer/MyAccountsView.js';
+const CustomerDashboard = lazyView(() => import('./components/customer/CustomerDashboard.js'), 'CustomerDashboard');
+const NewOrderView = lazyView(() => import('./components/customer/NewOrderView.js'), 'NewOrderView');
+const VirtualNumbersView = lazyView(() => import('./components/customer/VirtualNumbersView.js'), 'VirtualNumbersView');
+const OrdersView = lazyView(() => import('./components/customer/OrdersView.js'), 'OrdersView');
+const ServicesView = lazyView(() => import('./components/customer/ServicesView.js'), 'ServicesView');
+const WalletView = lazyView(() => import('./components/customer/WalletView.js'), 'WalletView');
+const SupportView = lazyView(() => import('./components/customer/SupportView.js'), 'SupportView');
+const ProfileView = lazyView(() => import('./components/customer/ProfileView.js'), 'ProfileView');
+const AccountsStoreView = lazyView(() => import('./components/customer/AccountsStoreView.js'), 'AccountsStoreView');
+const MyAccountsView = lazyView(() => import('./components/customer/MyAccountsView.js'), 'MyAccountsView');
 
 // Admin Views
-import { AdminDashboard } from './components/admin/AdminDashboard.js';
-import { AdminOrdersView } from './components/admin/AdminOrdersView.js';
-import { AdminAccountsView } from './components/admin/AdminAccountsView.js';
-import { AdminServicesView } from './components/admin/AdminServicesView.js';
-import { AdminPricingView } from './components/admin/AdminPricingView.js';
-import { AdminPaymentsView } from './components/admin/AdminPaymentsView.js';
-import { AdminUsersView } from './components/admin/AdminUsersView.js';
-import { AdminSupportView } from './components/admin/AdminSupportView.js';
-import { AdminSettingsView } from './components/admin/AdminSettingsView.js';
-import { AdminAuditLogsView } from './components/admin/AdminAuditLogsView.js';
+const AdminDashboard = lazyView(() => import('./components/admin/AdminDashboard.js'), 'AdminDashboard');
+const AdminOrdersView = lazyView(() => import('./components/admin/AdminOrdersView.js'), 'AdminOrdersView');
+const AdminAccountsView = lazyView(() => import('./components/admin/AdminAccountsView.js'), 'AdminAccountsView');
+const AdminServicesView = lazyView(() => import('./components/admin/AdminServicesView.js'), 'AdminServicesView');
+const AdminPricingView = lazyView(() => import('./components/admin/AdminPricingView.js'), 'AdminPricingView');
+const AdminPaymentsView = lazyView(() => import('./components/admin/AdminPaymentsView.js'), 'AdminPaymentsView');
+const AdminUsersView = lazyView(() => import('./components/admin/AdminUsersView.js'), 'AdminUsersView');
+const AdminSupportView = lazyView(() => import('./components/admin/AdminSupportView.js'), 'AdminSupportView');
+const AdminSettingsView = lazyView(() => import('./components/admin/AdminSettingsView.js'), 'AdminSettingsView');
+const AdminAuditLogsView = lazyView(() => import('./components/admin/AdminAuditLogsView.js'), 'AdminAuditLogsView');
+
+const ViewFallback: React.FC = () => (
+  <div className="w-full py-20 flex flex-col items-center justify-center gap-3">
+    <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 animate-pulse" />
+    <div className="text-xs text-slate-500">Loading view…</div>
+  </div>
+);
 
 const MainLayout: React.FC = () => {
   const { user, activeView, toast } = useApp();
@@ -120,7 +134,9 @@ const MainLayout: React.FC = () => {
           }`}
         >
           <ErrorBoundary fallbackTitle="View Failed to Render">
-            {renderCurrentView()}
+            <Suspense fallback={<ViewFallback />}>
+              {renderCurrentView()}
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>
