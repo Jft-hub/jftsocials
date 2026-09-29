@@ -24,7 +24,7 @@ import {
   AccountOrder,
   GroupedService
 } from '../src/types/index.js';
-import { queueMirrorSnapshot, queueRemoteDelete, MirrorSnapshot } from './supabaseMirror.js';
+import { queueMirrorSnapshot, queueRemoteDelete, queueRemotePurge, MirrorSnapshot } from './supabaseMirror.js';
 
 interface DatabaseSchema {
   users: User[];
@@ -45,6 +45,7 @@ interface DatabaseSchema {
   audit_logs: AuditLog[];
   settings: SystemSettings;
   deleted_users?: string[];
+  deleted_orders?: string[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -308,6 +309,7 @@ class Database {
       support_messages: this.data.support_messages || [],
       notifications: this.data.notifications || [],
       deleted_users: (this.data.deleted_users || []).map((id: string) => ({ id })),
+      deleted_orders: (this.data.deleted_orders || []).map((id: string) => ({ id })),
       audit_logs: (this.data.audit_logs || []).map((a: any) => ({
         id: a.id, actor_id: a.actor_id || '', actor_name: a.actor_name || '',
         actor_role: a.actor_role || '', action: a.action || '',
@@ -347,6 +349,17 @@ class Database {
       if (!this.data.deleted_users) this.data.deleted_users = [];
       for (const id of ids) {
         if (!this.data.deleted_users.includes(id)) this.data.deleted_users.push(id);
+      }
+    }
+    const orderTombs = pick('deleted_orders');
+    if (orderTombs) {
+      const ids = orderTombs.map((r: any) => r.id).filter(Boolean);
+      if (!this.data.deleted_orders) this.data.deleted_orders = [];
+      const doomed = new Set(ids);
+      this.data.orders = (this.data.orders || []).filter(o => !doomed.has(o.id));
+      this.data.payments = (this.data.payments || []).filter(p => !doomed.has(p.id));
+      for (const id of ids) {
+        if (!this.data.deleted_orders.includes(id)) this.data.deleted_orders.push(id);
       }
     }
     // Deletes win: purge anything the tombstones condemn (including rows the
@@ -400,7 +413,8 @@ class Database {
       support_messages: this.data.support_messages?.length || 0,
       notifications: this.data.notifications?.length || 0,
       audit_logs: this.data.audit_logs?.length || 0,
-      deleted_users: this.data.deleted_users?.length || 0
+      deleted_users: this.data.deleted_users?.length || 0,
+      deleted_orders: this.data.deleted_orders?.length || 0
     };
   }
 
@@ -427,6 +441,9 @@ class Database {
           }
           if (!parsed.deleted_users) {
             parsed.deleted_users = [];
+          }
+          if (!parsed.deleted_orders) {
+            parsed.deleted_orders = [];
           }
           if (!parsed.accountCategories.some((c: any) => c.id === 'uk_tiktok')) {
             parsed.accountCategories.push({
@@ -1112,6 +1129,34 @@ class Database {
       // local delete already succeeded; remote converges on next flush
     }
     return { ordersKept: kept };
+  }
+
+  // One-time purge of anonymized test orders ("Deleted User"). The ids are
+  // tombstoned so no redeploy or mirror restore ever brings them back.
+  // Future deletions keep working as before (anonymized, still visible).
+  public purgeAnonymizedOrders(): { orders: number; payments: number } {
+    // Strict match: only rows our own anonymizer stamped (never guess).
+    const isAnon = (o: any) => o.user_name === 'Deleted User';
+    const doomedOrders = (this.data.orders || []).filter(isAnon);
+    const doomedPayments = (this.data.payments || []).filter(isAnon);
+    const orderIds = doomedOrders.map(o => o.id);
+    const paymentIds = new Set(doomedPayments.map(p => p.id));
+
+    this.data.orders = (this.data.orders || []).filter(o => !isAnon(o));
+    this.data.payments = (this.data.payments || []).filter(p => !isAnon(p));
+
+    if (!this.data.deleted_orders) this.data.deleted_orders = [];
+    for (const id of [...orderIds, ...paymentIds]) {
+      if (!this.data.deleted_orders.includes(id)) this.data.deleted_orders.push(id);
+    }
+
+    this.save();
+    try {
+      queueRemotePurge({ orders: orderIds, payments: [...paymentIds] });
+    } catch {
+      // local purge already done - remote converges on next mirror/restore
+    }
+    return { orders: orderIds.length, payments: paymentIds.size };
   }
 
   // Re-applies tombstones (used after mirror restores so deleted users stay gone).

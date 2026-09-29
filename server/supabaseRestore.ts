@@ -35,6 +35,7 @@ const MIRROR_TABLES = [
   'notifications',
   'audit_logs',
   'deleted_users',
+  'deleted_orders',
 ];
 
 // Tables whose growth proves the mirror is newer. Catalog-ish small tables
@@ -51,6 +52,7 @@ const GROWTH_TABLES = [
   'support_messages',
   'notifications',
   'deleted_users',
+  'deleted_orders',
 ];
 
 const RESTORE_TIMEOUT_MS = 25000;

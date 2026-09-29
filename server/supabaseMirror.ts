@@ -45,6 +45,7 @@ const TABLES: Array<keyof Omit<MirrorSnapshot, 'settings'>> = [
   'notifications',
   'audit_logs',
   'deleted_users',
+  'deleted_orders',
 ];
 
 let disabledLogged = false;
@@ -188,6 +189,45 @@ export function queueRemoteDelete(userId: string): void {
         console.log(`[SupabaseMirror] Remote delete complete for user ${userId}.`);
       } catch (e: any) {
         console.warn('[SupabaseMirror] Remote delete failed (local delete unaffected):', e.message || e);
+      }
+    })();
+  } catch {
+    // intentionally silent
+  }
+}
+
+// Immediate remote purge of specific rows (one-time cleanups). Same rules as
+// remote delete: runs now, never throws, never affects local data.
+export function queueRemotePurge(idsByTable: Record<string, string[]>): void {
+  try {
+    const cfg = config();
+    if (!cfg) return;
+    const entries = Object.entries(idsByTable).filter(([, ids]) => ids && ids.length > 0);
+    if (entries.length === 0) return;
+    (async () => {
+      try {
+        const H = {
+          apikey: cfg.key,
+          Authorization: `Bearer ${cfg.key}`,
+        };
+        for (const [table, ids] of entries) {
+          // Chunked: PostgREST OR-filters stay small per request.
+          for (let i = 0; i < ids.length; i += 50) {
+            const chunk = ids.slice(i, i + 50);
+            const orFilter = chunk.map(id => `id.eq.${encodeURIComponent(id)}`).join(',');
+            try {
+              await fetch(`${cfg.url}/rest/v1/${table}?or=(${orFilter})`, {
+                method: 'DELETE',
+                headers: H,
+              });
+            } catch (e: any) {
+              console.warn(`[SupabaseMirror] remote purge ${table} chunk failed:`, e.message || e);
+            }
+          }
+        }
+        console.log('[SupabaseMirror] Remote purge complete.');
+      } catch (e: any) {
+        console.warn('[SupabaseMirror] Remote purge failed (local purge unaffected):', e.message || e);
       }
     })();
   } catch {

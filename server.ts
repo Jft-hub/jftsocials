@@ -2069,6 +2069,31 @@ app.post('/api/admin/orders/sync-all', verifyAdmin, async (req: AuthenticatedReq
   }
 });
 
+// One-time purge of anonymized test orders ("Deleted User"). Tombstoned so
+// no redeploy or restore ever brings them back. Future deletions keep their
+// anonymized rows - this is for cleaning old test pollution only.
+app.delete('/api/admin/orders/purge-anonymized', verifyAdmin, (req: AuthenticatedRequest, res) => {
+  const admin = req.user!;
+  try {
+    const result = db.purgeAnonymizedOrders();
+
+    db.addAuditLog({
+      actor_id: admin.id,
+      actor_name: admin.name,
+      actor_role: admin.role,
+      action: 'PURGE_ANONYMIZED_ORDERS',
+      entity_type: 'order',
+      entity_id: 'bulk',
+      details: `Purged ${result.orders} anonymized orders and ${result.payments} anonymized payments`,
+      ip: req.ip || '127.0.0.1'
+    });
+
+    res.json({ success: true, purged_orders: result.orders, purged_payments: result.payments });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Admin Manual Wallet Adjustment
 app.post('/api/admin/users/:id/adjust-wallet', verifyAdmin, (req: AuthenticatedRequest, res) => {
   try {

@@ -18,6 +18,35 @@ export const AdminOrdersView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [purging, setPurging] = useState(false);
+
+  const handlePurgeAnonymized = async () => {
+    if (!token) return;
+    const count = orders.filter(o => o.user_name === 'Deleted User').length;
+    if (count === 0) {
+      showToast('No anonymized test orders to purge.', 'info');
+      return;
+    }
+    if (!window.confirm(`Permanently erase ${count} anonymized test order(s) ("Deleted User")?\n\nRevenue and profit totals will drop to true business. This cannot be undone.`)) return;
+    setPurging(true);
+    try {
+      const res = await fetch('/api/admin/orders/purge-anonymized', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Purged ${data.purged_orders} test orders. Totals are clean now.`, 'success');
+        fetchAdminOrders();
+      } else {
+        showToast(data.error || 'Purge failed.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      setPurging(false);
+    }
+  };
 
   // Refund Modal State
   const [refundOrderId, setRefundOrderId] = useState<string | null>(null);
@@ -128,13 +157,23 @@ export const AdminOrdersView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={fetchAdminOrders}
-          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 flex items-center gap-1.5 transition self-start sm:self-auto"
-        >
-          <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Sync Orders</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={fetchAdminOrders}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 flex items-center gap-1.5 transition"
+          >
+            <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Sync Orders</span>
+          </button>
+          <button
+            onClick={handlePurgeAnonymized}
+            disabled={purging}
+            className="px-3.5 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-xs text-rose-300 font-semibold flex items-center gap-1.5 transition"
+            title="Permanently erase anonymized test orders"
+          >
+            <span>{purging ? 'Purging…' : 'Purge Test Data'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}
