@@ -46,14 +46,14 @@ export const AdminPricingView: React.FC = () => {
       .catch(console.error);
   }, [token]);
 
-  // Live Calculator Logic (mirrors the live v4 engine rule exactly)
+  // Live Calculator Logic (mirrors the live v4.1 engine rule exactly)
   useEffect(() => {
     const providerCost = (calcProviderRate * calcQuantity) / 1000;
     const percentageProfit = providerCost * 0.3;
-    const floorProfit = 51;
+    const floorProfit = 50;
     const isFloorApplied = providerCost < 50;
-    const grossProfit = isFloorApplied ? 51 - providerCost : percentageProfit;
-    const finalSellingPrice = isFloorApplied ? 51 : providerCost + percentageProfit;
+    const grossProfit = isFloorApplied ? 50 : percentageProfit;
+    const finalSellingPrice = isFloorApplied ? providerCost + 50 : providerCost + percentageProfit;
     const effectiveMargin = finalSellingPrice > 0 ? (grossProfit / finalSellingPrice) * 100 : 0;
 
     setCalcResult({
@@ -109,7 +109,7 @@ export const AdminPricingView: React.FC = () => {
             Rule of Truth
           </span>
           <span className="text-xs font-mono text-cyan-400">
-            Selling Price = ₦51 flat under ₦50, else Provider Cost + 30%
+            Selling Price = Cost + ₦50 under ₦50, else Cost + 30%
           </span>
         </div>
         <h1 className="text-2xl font-bold font-display text-white mt-1">
@@ -183,9 +183,9 @@ export const AdminPricingView: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center text-slate-300">
-                  <span>3. Micro-Order Floor:</span>
+                  <span>3. Micro-Order Margin:</span>
                   <span className="font-mono text-indigo-300 font-semibold">
-                    ₦51 flat under ₦50
+                    +₦50 flat under ₦50
                   </span>
                 </div>
 
@@ -201,7 +201,7 @@ export const AdminPricingView: React.FC = () => {
                       +₦{calcResult.grossProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </div>
                     <div className="text-[10px] text-cyan-400 font-semibold">
-                      {calcResult.isFloorApplied ? '₦51 Micro Floor Applied' : '30% Standard Markup Applied'}
+                      {calcResult.isFloorApplied ? '+₦50 Micro Margin Applied' : '30% Standard Markup Applied'}
                     </div>
                   </div>
                 </div>
@@ -240,8 +240,8 @@ export const AdminPricingView: React.FC = () => {
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-            <span className="font-bold text-white">Live pricing rule:</span> totals under ₦50 sell
-            flat at <span className="font-mono font-bold text-white">₦51</span>; totals ₦50+ carry{' '}
+            <span className="font-bold text-white">Live pricing rule:</span> totals under ₦50 carry{' '}
+            <span className="font-mono font-bold text-white">+₦50</span> (₦3 → ₦53); totals ₦50+ carry{' '}
             <span className="font-mono font-bold text-white">+30%</span>. Customers only ever see the
             final total. USDT totals convert at the rate below.
           </div>

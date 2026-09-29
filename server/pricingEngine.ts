@@ -20,7 +20,7 @@ export interface PricingOptions {
  *
  * Provider Cost = (Provider Rate in NGN * Customer Quantity) / 1000
  * Final Customer Price:
- *   - Base below ₦50  -> flat ₦51 total (micro-transactions stay worthwhile)
+ *   - Base below ₦50  -> base + ₦50 flat (e.g. ₦3 -> ₦53, ₦7.30 -> ₦57.30)
  *   - Base ₦50 or more -> base + 30%
  * The base is the provider cost (or the service custom price when set).
  * Customers only ever see the final total, never the added margin.
@@ -47,12 +47,12 @@ export function calculateOrderPrice(options: PricingOptions): PriceCalculationRe
     baseNGN = providerCostNGN;
   }
 
-  // JFT rule v4, applied BEFORE the price is rendered anywhere.
+  // JFT rule v4.1, applied BEFORE the price is rendered anywhere.
   let customerPriceNGN: number;
   let appliedMarkupNGN: number;
   let calculatedPercentMarkupNGN: number;
   if (baseNGN < 50) {
-    customerPriceNGN = 51;
+    customerPriceNGN = roundMoney(baseNGN + 50);
     calculatedPercentMarkupNGN = roundMoney(baseNGN * 0.30);
     appliedMarkupNGN = roundMoney(customerPriceNGN - providerCostNGN);
   } else {
@@ -123,7 +123,7 @@ export function calculateOrderPrice(options: PricingOptions): PriceCalculationRe
     effective_profit_percentage: effectiveProfitPercentage,
     currency,
     exchange_rate_used: exchangeRate,
-    pricing_rule_version: 'v4.0-floor51-plus30'
+    pricing_rule_version: 'v4.1-flat50-plus30'
   };
 }
 
