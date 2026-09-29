@@ -42,6 +42,21 @@ export const VirtualNumbersView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'buy' | 'orders'>('buy');
   const [countries, setCountries] = useState<Record<string, any>>({});
   const [products, setProducts] = useState<ProductItem[]>([]);
+  const [rateUsed, setRateUsed] = useState<number>(0);
+
+  // Always-available country list so the picker never vanishes, even if the
+  // live country feed hiccups. Live results override these when they arrive.
+  const FALLBACK_COUNTRIES: Record<string, any> = {
+    nigeria: { text_en: 'Nigeria', prefix: '+234' },
+    ghana: { text_en: 'Ghana', prefix: '+233' },
+    kenya: { text_en: 'Kenya', prefix: '+254' },
+    southafrica: { text_en: 'South Africa', prefix: '+27' },
+    usa: { text_en: 'United States', prefix: '+1' },
+    unitedkingdom: { text_en: 'United Kingdom', prefix: '+44' },
+    canada: { text_en: 'Canada', prefix: '+1' },
+    germany: { text_en: 'Germany', prefix: '+49' },
+  };
+  const countryEntries = Object.entries({ ...FALLBACK_COUNTRIES, ...countries });
   const [orders, setOrders] = useState<NumberOrder[]>([]);
 
   // Selection states. Default is Nigeria (real inventory on first paint):
@@ -88,6 +103,7 @@ export const VirtualNumbersView: React.FC = () => {
           if (cancelled) return;
           if (data.success && data.products) {
             setProducts(data.products);
+            if (typeof data.rate_used_ngn === 'number') setRateUsed(data.rate_used_ngn);
             // If previous selection is no longer valid, pick the first available
             if (data.products.length > 0) {
               const exists = data.products.find((p: ProductItem) => p.name === selectedProduct);
@@ -561,23 +577,25 @@ export const VirtualNumbersView: React.FC = () => {
                 ))}
               </div>
 
-              {/* Full Country Dropdown */}
-              {Object.keys(countries).length > 0 && (
-                <div className="pt-2">
-                  <select
-                    value={selectedCountry}
-                    onChange={e => setSelectedCountry(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="any">Any Country (Fastest delivery)</option>
-                    {Object.entries(countries).map(([iso, c]: [string, any]) => (
-                      <option key={iso} value={iso}>
-                        {c.text_en || iso} ({c.prefix ? `+${c.prefix}` : iso})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Full Country Dropdown (always visible - fallback list built in) */}
+              <div className="pt-2">
+                <select
+                  value={selectedCountry}
+                  onChange={e => setSelectedCountry(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  {countryEntries.map(([iso, c]: [string, any]) => (
+                    <option key={iso} value={iso}>
+                      {c.text_en || iso} ({c.prefix ? (String(c.prefix).startsWith('+') ? c.prefix : `+${c.prefix}`) : iso})
+                    </option>
+                  ))}
+                </select>
+                {rateUsed > 0 && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Prices: native units × ₦{rateUsed} + 50% (rate set in Admin → Settings → 5)
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Step 2: Service / Product Selection */}
@@ -630,7 +648,7 @@ export const VirtualNumbersView: React.FC = () => {
                         <div className="truncate">
                           <div className="font-semibold text-xs text-white capitalize truncate">{p.name}</div>
                           <div className="text-[10px] text-slate-400">
-                            {(p.count ?? 0).toLocaleString()} available
+                            {(p.count ?? 0).toLocaleString()} available • {p.price_native} units
                           </div>
                         </div>
 

@@ -1040,7 +1040,13 @@ app.get('/api/numbers/products', async (req, res) => {
       };
     });
 
-    res.json({ success: true, products });
+    res.json({
+      success: true,
+      products,
+      // Exposed so the storefront (and you) can verify the math:
+      // customer price = native units x this rate + 50% markup.
+      rate_used_ngn: settings.five_sim_rate_to_ngn || 0
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
