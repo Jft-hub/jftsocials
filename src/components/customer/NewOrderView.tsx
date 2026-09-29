@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.js';
 import { Currency } from '../../types/index.js';
+import { isFollowersService } from '../../utils/serviceType.js';
 
 export const NewOrderView: React.FC = () => {
   const { token, currency, wallets, showToast, setActiveView, refreshOrders, refreshUserData, orderServicePreset, setOrderServicePreset } = useApp();
@@ -94,7 +95,7 @@ export const NewOrderView: React.FC = () => {
   // Dynamic Service Category filters (Followers, Likes, Comments, Saves, Shares, Views, etc.)
   const categoryTypeDefinitions = [
     { id: 'all', label: 'All Services', test: () => true },
-    { id: 'followers', label: 'Followers', test: (name: string) => /follower|subscriber|member/i.test(name) },
+    { id: 'followers', label: 'Followers', test: isFollowersService },
     { id: 'likes', label: 'Likes', test: (name: string) => /like|reaction/i.test(name) },
     { id: 'comments', label: 'Comments', test: (name: string) => /comment/i.test(name) },
     { id: 'saves', label: 'Saves', test: (name: string) => /save|favorite|bookmark/i.test(name) },

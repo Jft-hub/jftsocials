@@ -1,5 +1,7 @@
 import { db } from './db.js';
 import { PeakerrClient, ServiceProvider } from './peakerrClient.js';
+import { calculateOrderPrice } from './pricingEngine.js';
+import { isFollowersService } from '../src/utils/serviceType.js';
 import {
   OrderStatus,
   Order,
@@ -364,11 +366,12 @@ export class AutomationEngine {
   /**
    * Cross-provider service catalog aggregator.
    * Merges services across providers (e.g. Peakerr and Engainsmedia) into parent
-   * GroupedService entities with child provider options, ensuring consistent 20%
-   * markup and ranking from cheapest to highest.
+   * GroupedService entities with child provider options, priced by the shared
+   * pricing engine and ranked from cheapest to highest.
    */
   public aggregateGroupedServices(): GroupedService[] {
     const services = db.getServices(true);
+    const groupSettings = db.getSettings();
     const now = new Date().toISOString();
 
     const groupsMap = new Map<string, {
@@ -397,7 +400,7 @@ export class AutomationEngine {
 
       // 2. Identify Category Type (Followers, Likes, Comments, Saves, Shares, Views)
       let categoryType: ServiceCategoryType = 'other';
-      if (/follower|subscriber|member/i.test(nameLower)) categoryType = 'followers';
+      if (isFollowersService(nameLower)) categoryType = 'followers';
       else if (/like|reaction/i.test(nameLower)) categoryType = 'likes';
       else if (/comment/i.test(nameLower)) categoryType = 'comments';
       else if (/save/i.test(nameLower)) categoryType = 'saves';
@@ -416,8 +419,15 @@ export class AutomationEngine {
       // 4. Generate normalized parent key
       const normalizedKey = `${platform}_${categoryType}_${refillTier}`;
 
-      // Calculate customer price with pure 20% markup (no 2000 floor)
-      const customerPrice = Math.round(service.provider_rate * 1.20 * 100) / 100;
+      // Customer price per 1,000 comes from the single pricing engine so that
+      // option ranking (and the option picked for grouped orders) always uses
+      // the same price the customer is actually charged.
+      const customerPrice = calculateOrderPrice({
+        service,
+        quantity: 1000,
+        currency: 'NGN',
+        settings: groupSettings
+      }).customer_price;
 
       const providerOption: ServiceProviderOption = {
         service_id: service.id,
