@@ -19,6 +19,8 @@ export class AutomationEngine {
   private syncTimer: NodeJS.Timeout | null = null;
   private serviceSyncTimer: NodeJS.Timeout | null = null;
   private isSyncing: boolean = false;
+  private numberSweeper?: () => Promise<unknown>;
+  private numberSweepTimer: NodeJS.Timeout | null = null;
 
   constructor(
     peakerrOrResolver: PeakerrClient | ProviderResolver,
@@ -31,6 +33,20 @@ export class AutomationEngine {
       this.peakerr = peakerrOrResolver;
     }
     this.providers = providers;
+  }
+
+  /** Registers the virtual-number reconcile/refund sweeper (runs about every 60s once started). */
+  public setNumberOrderSweeper(fn: () => Promise<unknown>) {
+    this.numberSweeper = fn;
+  }
+
+  private async runNumberSweep() {
+    if (!this.numberSweeper) return;
+    try {
+      await this.numberSweeper();
+    } catch (e: any) {
+      console.warn('[AutomationEngine] Number order sweep warning:', e?.message || e);
+    }
   }
 
   public getProvider(providerId?: string): ServiceProvider {
@@ -57,6 +73,11 @@ export class AutomationEngine {
     // starved the API thread and made the whole site feel slow.)
     this.syncTimer = setInterval(() => this.runOrderSync(), 60 * 1000);
 
+    // Virtual-number sweeper: closes expired / provider-terminal number orders and
+    // refunds them exactly once. First pass after 20s, then every 60s.
+    setTimeout(() => this.runNumberSweep(), 20 * 1000);
+    this.numberSweepTimer = setInterval(() => this.runNumberSweep(), 60 * 1000);
+
     // Pull the full service catalog from every configured provider shortly
     // after boot, then keep it fresh on a slower schedule (catalogs don't
     // change minute to minute the way order statuses do).
@@ -72,6 +93,10 @@ export class AutomationEngine {
     if (this.serviceSyncTimer) {
       clearInterval(this.serviceSyncTimer);
       this.serviceSyncTimer = null;
+    }
+    if (this.numberSweepTimer) {
+      clearInterval(this.numberSweepTimer);
+      this.numberSweepTimer = null;
     }
   }
 

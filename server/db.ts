@@ -294,7 +294,26 @@ class Database {
         created_at: o.created_at, updated_at: o.updated_at,
         completed_at: o.completed_at ?? null
       })),
-      number_orders: this.data.number_orders || [],
+      // Explicit columns only: an unknown key would make Supabase reject the whole batch.
+      // Extended audit columns are sent only once the Supabase table has them
+      // (set SUPABASE_NUMBER_ORDERS_EXTENDED=true after running the ALTER TABLE).
+      number_orders: (this.data.number_orders || []).map((o: any) => {
+        const base: any = {
+          id: o.id, user_id: o.user_id, provider_order_id: o.provider_order_id,
+          country: o.country, operator: o.operator, product: o.product, phone: o.phone,
+          status: o.status, provider_cost: o.provider_cost, customer_charge: o.customer_charge,
+          currency: o.currency, sms_code: o.sms_code ?? null, sms_text: o.sms_text ?? null,
+          expires_at: o.expires_at, created_at: o.created_at, updated_at: o.updated_at
+        };
+        if (process.env.SUPABASE_NUMBER_ORDERS_EXTENDED === 'true') {
+          base.provider = o.provider || 'fivesim';
+          base.provider_cost_native = o.provider_cost_native ?? null;
+          base.provider_currency = o.provider_currency ?? null;
+          base.provider_cost_ngn = o.provider_cost_ngn ?? null;
+          base.refunded_at = o.refunded_at ?? null;
+        }
+        return base;
+      }),
       account_categories: (this.data.accountCategories || []).map((c: any) => ({
         id: c.id, name: c.name, description: c.description || '',
         price_ngn: c.price_ngn ?? 0, active: !!c.active, created_at: c.created_at
@@ -464,6 +483,9 @@ class Database {
           // One-time migration: virtual-number markup default moved 50 -> 30.
           // The flag stops it being re-applied on every boot, so a later admin
           // change is never overwritten.
+          for (const no of parsed.number_orders as any[]) {
+            if (!no.provider) no.provider = 'fivesim';
+          }
           if (parsed.settings && !parsed.settings.five_sim_markup_migrated_30) {
             parsed.settings.five_sim_markup_percentage = 30;
             parsed.settings.five_sim_markup_migrated_30 = true;
@@ -1408,6 +1430,40 @@ class Database {
     };
     this.save();
     return this.data.number_orders[idx];
+  }
+
+  /**
+   * Atomic compare-and-set on a number order's status. The JSON db is
+   * single-process and this method has no awaits, so two concurrent requests
+   * (double-click) cannot both win the same transition.
+   * Returns the updated order, or null when the current status is not allowed.
+   */
+  public transitionNumberOrderStatus(
+    id: string,
+    allowedFrom: NumberOrder['status'][],
+    to: NumberOrder['status']
+  ): NumberOrder | null {
+    const order = this.findNumberOrderById(id);
+    if (!order || !allowedFrom.includes(order.status)) return null;
+    return this.updateNumberOrder(id, { status: to });
+  }
+
+  /**
+   * Refund a number order's charge exactly once. Idempotent: skips when a
+   * 'refund' ledger entry with reference REF-<order.id> already exists.
+   */
+  public refundNumberOrderOnce(order: NumberOrder, description: string): { refunded: boolean } {
+    const ref = `REF-${order.id}`;
+    const already = (this.data.wallet_transactions || []).some(
+      t => t.reference_id === ref && t.type === 'refund'
+    );
+    if (already) {
+      if (!order.refunded_at) this.updateNumberOrder(order.id, { refunded_at: new Date().toISOString() });
+      return { refunded: false };
+    }
+    this.creditWallet(order.user_id, order.currency, order.customer_charge, 'refund', ref, description);
+    this.updateNumberOrder(order.id, { refunded_at: new Date().toISOString() });
+    return { refunded: true };
   }
 
   /**

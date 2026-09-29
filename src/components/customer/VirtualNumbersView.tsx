@@ -42,6 +42,7 @@ export const VirtualNumbersView: React.FC = () => {
   const [countries, setCountries] = useState<Record<string, any>>({});
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [numbersUnavailable, setNumbersUnavailable] = useState<boolean>(false);
+  const [cancelingIds, setCancelingIds] = useState<string[]>([]);
 
   // Always-available country list so the picker never vanishes, even if the
   // live country feed hiccups. Live results override these when they arrive.
@@ -300,10 +301,12 @@ export const VirtualNumbersView: React.FC = () => {
 
   const handleCancelOrder = async (orderId: string) => {
     if (!token) return;
+    if (cancelingIds.includes(orderId)) return; // ignore double-clicks
     if (!confirm('Cancel this number order? If no SMS has arrived, your wallet will be refunded immediately.')) {
       return;
     }
 
+    setCancelingIds(prev => [...prev, orderId]);
     try {
       const res = await fetch(`/api/numbers/orders/${orderId}/cancel`, {
         method: 'POST',
@@ -319,9 +322,12 @@ export const VirtualNumbersView: React.FC = () => {
         refreshUserData();
       } else {
         showToast(data.error || 'Failed to cancel order.', 'error');
+        fetchOrders(); // sync status (e.g. SMS arrived meanwhile)
       }
     } catch (e: any) {
-      showToast(e.message, 'error');
+      showToast('Could not cancel right now. Please try again.', 'error');
+    } finally {
+      setCancelingIds(prev => prev.filter(id => id !== orderId));
     }
   };
 
@@ -525,7 +531,8 @@ export const VirtualNumbersView: React.FC = () => {
             {!activeOrder.sms_code && (
               <button
                 onClick={() => handleCancelOrder(activeOrder.id)}
-                className="px-4 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                disabled={cancelingIds.includes(activeOrder.id)}
+                className="disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
               >
                 <XCircle className="w-3.5 h-3.5" />
                 <span>Cancel & Refund</span>
@@ -837,7 +844,8 @@ export const VirtualNumbersView: React.FC = () => {
                               {!o.sms_code && (
                                 <button
                                   onClick={() => handleCancelOrder(o.id)}
-                                  className="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-[11px] transition cursor-pointer"
+                                  disabled={cancelingIds.includes(o.id)}
+                                  className="disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-[11px] transition cursor-pointer"
                                 >
                                   Cancel
                                 </button>

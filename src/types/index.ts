@@ -235,7 +235,7 @@ export interface AuditLog {
   created_at: string;
 }
 
-export type NumberOrderStatus = 'PENDING' | 'RECEIVED' | 'CANCELED' | 'TIMEOUT' | 'FINISHED' | 'BANNED';
+export type NumberOrderStatus = 'PENDING' | 'CANCELING' | 'RECEIVED' | 'CANCELED' | 'TIMEOUT' | 'FINISHED' | 'BANNED';
 
 export interface NumberOrder {
   id: string;                    // our internal id
@@ -251,6 +251,7 @@ export interface NumberOrder {
   provider_cost_native?: number; // same as provider_cost, explicit for audit
   provider_currency?: 'RUB' | 'USD'; // native currency of provider_cost_native
   provider_cost_ngn?: number;    // provider cost converted to NGN at order time
+  refunded_at?: string | null;   // set when the customer charge was refunded (once)
   customer_charge: number;       // what we actually debited, in `currency`
   currency: Currency;
   sms_code: string | null;

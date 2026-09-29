@@ -8,6 +8,7 @@ import { PeakerrClient, ServiceProvider } from './server/peakerrClient.js';
 import { EagainsmediaClient } from './server/eagainsmediaClient.js';
 import { FiveSimClient, NumberProviderUnavailableError } from './server/fiveSimClient.js';
 import { HeroSmsClient } from './server/heroSmsClient.js';
+import { createNumberOrderService } from './server/numberOrders.js';
 import { calculateOrderPrice, calculateNumberPrice, roundMoney, getNumberProviderRate, isNumberPricingConfigured } from './server/pricingEngine.js';
 import { AutomationEngine } from './server/automation.js';
 import { User, Currency, NumberOrder, AccountCategory, AccountListing, AccountOrder } from './src/types/index.js';
@@ -118,6 +119,14 @@ if (persistedHeroKey) {
   console.info('[Startup] No HeroSMS API key configured - 5sim remains the only numbers lane.');
 }
 
+// Number order lifecycle (reconcile / cancel / finish / sweeper), routed by order.provider.
+// Legacy orders have no provider and are 5sim. Hero SMS is wired in Part D.
+const numberOrders = createNumberOrderService((providerId?: string) => {
+  const id = (providerId || 'fivesim').toLowerCase();
+  if (id === 'fivesim' || id === '5sim') return fiveSim as any;
+  return undefined;
+});
+
 function getProviderClient(providerId?: string): ServiceProvider {
   if (providerId && providerId.toLowerCase() === 'eagainsmedia') {
     return eagainsmedia;
@@ -126,6 +135,7 @@ function getProviderClient(providerId?: string): ServiceProvider {
 }
 
 const automation = new AutomationEngine(getProviderClient);
+automation.setNumberOrderSweeper(() => numberOrders.sweepNumberOrders());
 automation.start();
 
 // Self keep-alive: while this instance is awake, knock on our own public
@@ -1189,88 +1199,31 @@ app.get('/api/numbers/orders/:id', authenticate, (req: AuthenticatedRequest, res
 
 app.post('/api/numbers/orders/:id/check', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const user = req.user!;
-    const order = db.findNumberOrderById(req.params.id);
-
-    if (!order || (order.user_id !== user.id && !['admin', 'superadmin'].includes(user.role))) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
-
-    const checkRes = await fiveSim.checkOrder(order.provider_order_id);
-    const smsCode = checkRes.sms && checkRes.sms.length > 0 ? checkRes.sms[checkRes.sms.length - 1].code : order.sms_code;
-    const smsText = checkRes.sms && checkRes.sms.length > 0 ? checkRes.sms[checkRes.sms.length - 1].text : order.sms_text;
-
-    const updated = db.updateNumberOrder(order.id, {
-      status: checkRes.status || order.status,
-      sms_code: smsCode,
-      sms_text: smsText,
-      expires_at: checkRes.expires || order.expires_at,
-      updated_at: new Date().toISOString()
-    });
-
-    res.json({ success: true, order: updated });
+    const r = await numberOrders.checkNumberOrder(req.params.id, req.user!);
+    res.status(r.status).json(r.body);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] check error:', err?.message || err);
+    res.status(502).json({ success: false, error: 'We could not check this order right now. Please try again in a moment.' });
   }
 });
 
-app.post('/api/numbers/orders/:id/cancel', authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/numbers/orders/:id/cancel', moneyLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const user = req.user!;
-    const order = db.findNumberOrderById(req.params.id);
-
-    if (!order || (order.user_id !== user.id && !['admin', 'superadmin'].includes(user.role))) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
-
-    if (order.status === 'CANCELED' || order.status === 'FINISHED' || order.status === 'TIMEOUT') {
-      return res.status(400).json({ success: false, error: `Order is already ${order.status}` });
-    }
-
-    await fiveSim.cancelOrder(order.provider_order_id);
-
-    // If no SMS code was received, refund the customer
-    if (!order.sms_code) {
-      db.creditWallet(
-        order.user_id,
-        order.currency,
-        order.customer_charge,
-        'refund',
-        `REF-${order.id}`,
-        `Refund: Cancelled virtual number ${order.product}`
-      );
-    }
-
-    const updated = db.updateNumberOrder(order.id, {
-      status: 'CANCELED',
-      updated_at: new Date().toISOString()
-    });
-
-    res.json({ success: true, order: updated, message: 'Order cancelled successfully.' });
+    const r = await numberOrders.cancelNumberOrder(req.params.id, req.user!, req.ip || '');
+    res.status(r.status).json(r.body);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] cancel error:', err?.message || err);
+    res.status(502).json({ success: false, error: 'We could not cancel this order right now. Please try again in a moment.' });
   }
 });
 
 app.post('/api/numbers/orders/:id/finish', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const user = req.user!;
-    const order = db.findNumberOrderById(req.params.id);
-
-    if (!order || (order.user_id !== user.id && !['admin', 'superadmin'].includes(user.role))) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
-
-    await fiveSim.finishOrder(order.provider_order_id);
-
-    const updated = db.updateNumberOrder(order.id, {
-      status: 'FINISHED',
-      updated_at: new Date().toISOString()
-    });
-
-    res.json({ success: true, order: updated, message: 'Order completed.' });
+    const r = await numberOrders.finishNumberOrder(req.params.id, req.user!);
+    res.status(r.status).json(r.body);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] finish error:', err?.message || err);
+    res.status(502).json({ success: false, error: 'We could not complete this order right now. Please try again in a moment.' });
   }
 });
 
