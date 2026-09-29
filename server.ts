@@ -1011,6 +1011,10 @@ app.get('/api/numbers/products', async (req, res) => {
     // Only sellable inventory: zero-stock products are hidden so customers
     // never pay for a number that isn't there (backend double-guard; the
     // order endpoint rejects Qty 0 independently).
+    // 5sim units are dollar-scale: fallbacks use the USD rate, never a
+    // hardcoded 25 (that relic underpriced everything ~60x).
+    const fallbackRate = settings.five_sim_rate_to_ngn > 0 ? settings.five_sim_rate_to_ngn : 1500;
+    const fallbackMarkup = 1 + (settings.five_sim_markup_percentage > 0 ? settings.five_sim_markup_percentage : 50) / 100;
     const products = Object.entries(rawProducts)
       .filter(([, details]) => (details.Qty || 0) > 0)
       .map(([name, details]) => {
@@ -1020,14 +1024,14 @@ app.get('/api/numbers/products', async (req, res) => {
         const pricingNgn = calculateNumberPrice(details.Price, 'NGN', settings);
         priceNgn = pricingNgn.customerPrice;
       } catch {
-        priceNgn = details.Price * 25 * 1.5;
+        priceNgn = details.Price * fallbackRate * fallbackMarkup;
       }
 
       try {
         const pricingUsdt = calculateNumberPrice(details.Price, 'USDT', settings);
         priceUsdt = pricingUsdt.customerPrice;
       } catch {
-        priceUsdt = Number(((details.Price * 25 * 1.5) / 1500).toFixed(2));
+        priceUsdt = Number(((details.Price * fallbackRate * fallbackMarkup) / 1500).toFixed(2));
       }
 
       return {

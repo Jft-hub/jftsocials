@@ -38,7 +38,8 @@ export const AdminSettingsView: React.FC = () => {
   // 5sim Provider & Virtual Numbers
   const [fivesimApiKey, setFivesimApiKey] = useState('');
   const [fivesimConfigured, setFivesimConfigured] = useState(false);
-  const [fivesimNgnRate, setFivesimNgnRate] = useState<number>(25.0);
+  // 5sim prices are dollar-scale units: 1 unit ≈ $1 ≈ ₦1,500.
+  const [fivesimNgnRate, setFivesimNgnRate] = useState<number>(1500);
   const [fivesimMarkupPercent, setFivesimMarkupPercent] = useState<number>(50);
   const [fivesimMinMarginNgn, setFivesimMinMarginNgn] = useState<number>(200);
 
@@ -69,7 +70,7 @@ export const AdminSettingsView: React.FC = () => {
           setEagainsmediaConfigured(Boolean(s.eagainsmedia_key_configured));
 
           setFivesimConfigured(Boolean(s.fivesim_key_configured));
-          setFivesimNgnRate(s.five_sim_rate_to_ngn ?? s.fivesim_ngn_rate ?? 25.0);
+          setFivesimNgnRate(s.five_sim_rate_to_ngn ?? s.fivesim_ngn_rate ?? 1500);
           setFivesimMarkupPercent(s.five_sim_markup_percentage ?? s.fivesim_markup_percent ?? 50);
           setFivesimMinMarginNgn(s.fivesim_min_margin_ngn || 200);
         }
@@ -411,7 +412,7 @@ export const AdminSettingsView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                5 Unit Exchange Rate to NGN (₦ per unit)
+                5 Unit Exchange Rate to NGN (₦ per $1 unit — usually ~1,500)
               </label>
               <input
                 type="number"
