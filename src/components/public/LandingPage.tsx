@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Zap,
   Shield,
@@ -15,7 +15,11 @@ import {
   RefreshCw,
   Wallet
 } from 'lucide-react';
-import { Hero3DCanvas } from '../3d/Hero3DCanvas.js';
+// Lazy: three.js is the heaviest dependency - it loads after first paint
+// instead of blocking it.
+const Hero3DCanvas = lazy(() =>
+  import('../3d/Hero3DCanvas.js').then(m => ({ default: m.Hero3DCanvas }))
+);
 import { WhatsAppBadge } from '../layout/WhatsAppBadge.js';
 import { LegalContent } from '../common/LegalContent.js';
 import { useApp } from '../../context/AppContext.js';
@@ -135,8 +139,8 @@ export const LandingPage: React.FC = () => {
                   <div className="text-xs text-slate-400">Instant Dispatch</div>
                 </div>
                 <div>
-                  <div className="text-xl sm:text-2xl font-bold font-mono text-indigo-300">₦2,000</div>
-                  <div className="text-xs text-slate-400">Min Margin Floor</div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-indigo-300">+₦50</div>
+                  <div className="text-xs text-slate-400">Micro Order Margin</div>
                 </div>
               </div>
             </div>
@@ -144,7 +148,15 @@ export const LandingPage: React.FC = () => {
             {/* Right Column: Interactive 3D Canvas */}
             <div className="lg:col-span-5 relative flex items-center justify-center">
               <div className="relative w-full aspect-square max-w-[440px] rounded-3xl bg-slate-900/30 border border-slate-800/80 p-2 shadow-2xl backdrop-blur-sm overflow-hidden flex items-center justify-center">
-                <Hero3DCanvas className="w-full h-full" />
+                <Suspense
+                  fallback={
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 animate-pulse" />
+                    </div>
+                  }
+                >
+                  <Hero3DCanvas className="w-full h-full" />
+                </Suspense>
                 <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800/80 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />

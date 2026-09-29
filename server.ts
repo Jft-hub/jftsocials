@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -24,6 +25,9 @@ app.disable('x-powered-by');
 
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: true, limit: '200kb' }));
+
+// ---- Gzip responses (the 1MB+ JS bundle shrinks to ~1/4 over the wire) ----
+app.use(compression());
 
 // ---- Security headers (no dependencies, safe subset that cannot break
 // the Vite bundle or the Paystack inline script) ----

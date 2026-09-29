@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext.js';
 import { Navbar } from './components/layout/Navbar.js';
 import { Sidebar } from './components/layout/Sidebar.js';
 import { WhatsAppBadge } from './components/layout/WhatsAppBadge.js';
-import { Onboarding3DModal } from './components/3d/Onboarding3DModal.js';
+// Lazy: three.js stays out of the first-paint bundle entirely.
+const Onboarding3DModal = lazy(() =>
+  import('./components/3d/Onboarding3DModal.js').then(m => ({ default: m.Onboarding3DModal }))
+);
 import { AuthModal } from './components/auth/AuthModal.js';
 import { ErrorBoundary } from './components/common/ErrorBoundary.js';
 
@@ -123,7 +126,9 @@ const MainLayout: React.FC = () => {
       </div>
 
       {/* Global Interactive 3D Onboarding Modal */}
-      <Onboarding3DModal />
+      <Suspense fallback={null}>
+        <Onboarding3DModal />
+      </Suspense>
 
       {/* Authentication Modal */}
       <AuthModal />
