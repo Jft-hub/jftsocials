@@ -16,6 +16,14 @@ export interface FiveSimOrder {
   country?: string;
 }
 
+/** Thrown when the upstream provider cannot be used (no key, rejected key, unreachable, no cached data). */
+export class NumberProviderUnavailableError extends Error {
+  constructor(message = 'Virtual numbers temporarily unavailable') {
+    super(message);
+    this.name = 'NumberProviderUnavailableError';
+  }
+}
+
 export class FiveSimClient {
   private apiKey: string;
   private apiUrl: string = 'https://5sim.net/v1';
@@ -70,7 +78,7 @@ export class FiveSimClient {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           this.authSuspended = true;
-          this.lastAuthError = `5sim API authentication rejected (HTTP ${response.status}). Operating in simulated sandbox mode until a valid API key is saved.`;
+          this.lastAuthError = `5sim API authentication rejected (HTTP ${response.status}). Numbers are unavailable until a valid API key is saved.`;
           console.info(`[FiveSimClient] ${this.lastAuthError}`);
         }
         const text = await response.text().catch(() => '');
@@ -156,7 +164,7 @@ export class FiveSimClient {
     // Fast path: fresh cache serves instantly without touching upstream.
     if (cached) return cached;
     // Slow path: refresh in background-friendly way (8s cap), fall back to
-    // stale cache of any age, then to the static mock catalog.
+    // stale cache of any age; never a mock catalog.
     const fresh = await this.guestFetch(`/guest/products/${encodeURIComponent(country)}/${encodeURIComponent(operator)}`);
     if (fresh && typeof fresh === 'object') {
       this.setCached(cacheKey, fresh);
@@ -165,17 +173,8 @@ export class FiveSimClient {
     const stale = this.guestCache.get(cacheKey);
     if (stale) return stale.data;
 
-    // Default institutional mock product catalog if upstream guest API is unreachable
-    return {
-      whatsapp: { Category: 'activation', Qty: 420, Price: 18.5 },
-      telegram: { Category: 'activation', Qty: 680, Price: 15.0 },
-      instagram: { Category: 'activation', Qty: 210, Price: 10.0 },
-      facebook: { Category: 'activation', Qty: 350, Price: 12.0 },
-      google: { Category: 'activation', Qty: 190, Price: 22.0 },
-      tiktok: { Category: 'activation', Qty: 310, Price: 14.5 },
-      twitter: { Category: 'activation', Qty: 150, Price: 16.0 },
-      openai: { Category: 'activation', Qty: 95, Price: 30.0 }
-    };
+    // No mock catalog: if upstream is unreachable and nothing is cached, numbers are unavailable.
+    throw new NumberProviderUnavailableError();
   }
 
   public async getCountries(): Promise<Record<string, any>> {
@@ -190,107 +189,40 @@ export class FiveSimClient {
     const stale = this.guestCache.get(cacheKey);
     if (stale) return stale.data;
 
-    return {
-      nigeria: { text: 'Nigeria', prefix: '+234', iso: 'NG' },
-      usa: { text: 'United States', prefix: '+1', iso: 'US' },
-      unitedkingdom: { text: 'United Kingdom', prefix: '+44', iso: 'GB' },
-      kenya: { text: 'Kenya', prefix: '+254', iso: 'KE' },
-      ghana: { text: 'Ghana', prefix: '+233', iso: 'GH' },
-      southafrica: { text: 'South Africa', prefix: '+27', iso: 'ZA' },
-      canada: { text: 'Canada', prefix: '+1', iso: 'CA' },
-      germany: { text: 'Germany', prefix: '+49', iso: 'DE' },
-      france: { text: 'France', prefix: '+33', iso: 'FR' },
-      india: { text: 'India', prefix: '+91', iso: 'IN' }
-    };
+    throw new NumberProviderUnavailableError();
   }
 
   public async buyActivation(country: string, operator: string, product: string): Promise<FiveSimOrder> {
     if (!this.isLive()) {
-      // Mock activation for testing/demo
-      const mockId = Math.floor(1000000 + Math.random() * 9000000);
-      const prefix = country === 'nigeria' ? '+23480' : country === 'usa' ? '+1415' : '+4479';
-      const randomDigits = Math.floor(100000 + Math.random() * 900000);
-      return {
-        id: mockId,
-        phone: `${prefix}${randomDigits}`,
-        operator: operator || 'any',
-        product,
-        price: 15.0,
-        status: 'PENDING',
-        expires: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        sms: [],
-        created_at: new Date().toISOString(),
-        country
-      };
+      throw new NumberProviderUnavailableError();
     }
     return this.request(`/user/buy/activation/${encodeURIComponent(country)}/${encodeURIComponent(operator)}/${encodeURIComponent(product)}`);
   }
 
   public async checkOrder(id: number | string): Promise<FiveSimOrder> {
     if (!this.isLive()) {
-      // Return synthetic check order
-      return {
-        id: Number(id),
-        phone: '+2348012345678',
-        operator: 'any',
-        product: 'whatsapp',
-        price: 15.0,
-        status: 'PENDING',
-        expires: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        sms: [],
-        created_at: new Date().toISOString()
-      };
+      throw new NumberProviderUnavailableError();
     }
     return this.request(`/user/check/${id}`);
   }
 
   public async finishOrder(id: number | string): Promise<FiveSimOrder> {
     if (!this.isLive()) {
-      return {
-        id: Number(id),
-        phone: '+2348012345678',
-        operator: 'any',
-        product: 'whatsapp',
-        price: 15.0,
-        status: 'FINISHED',
-        expires: new Date().toISOString(),
-        sms: [],
-        created_at: new Date().toISOString()
-      };
+      throw new NumberProviderUnavailableError();
     }
     return this.request(`/user/finish/${id}`);
   }
 
   public async cancelOrder(id: number | string): Promise<FiveSimOrder> {
     if (!this.isLive()) {
-      return {
-        id: Number(id),
-        phone: '+2348012345678',
-        operator: 'any',
-        product: 'whatsapp',
-        price: 15.0,
-        status: 'CANCELED',
-        expires: new Date().toISOString(),
-        sms: [],
-        created_at: new Date().toISOString()
-      };
+      throw new NumberProviderUnavailableError();
     }
     return this.request(`/user/cancel/${id}`);
   }
 
   public async banOrder(id: number | string): Promise<FiveSimOrder> {
     if (!this.isLive()) {
-      return {
-        id: Number(id),
-        phone: '+2348012345678',
-        operator: 'any',
-        product: 'whatsapp',
-        price: 15.0,
-        status: 'BANNED',
-        expires: new Date().toISOString(),
-        sms: [],
-        created_at: new Date().toISOString()
-      };
+      throw new NumberProviderUnavailableError();
     }
     return this.request(`/user/ban/${id}`);
   }

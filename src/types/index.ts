@@ -247,7 +247,10 @@ export interface NumberOrder {
   product: string;               // e.g. "facebook", "whatsapp"
   phone: string;
   status: NumberOrderStatus;
-  provider_cost: number;         // raw 5sim price, in 5sim's native unit
+  provider_cost: number;         // raw provider price, in the provider's native unit
+  provider_cost_native?: number; // same as provider_cost, explicit for audit
+  provider_currency?: 'RUB' | 'USD'; // native currency of provider_cost_native
+  provider_cost_ngn?: number;    // provider cost converted to NGN at order time
   customer_charge: number;       // what we actually debited, in `currency`
   currency: Currency;
   sms_code: string | null;
@@ -281,8 +284,9 @@ export interface SystemSettings {
   eagainsmedia_api_url?: string;
   eagainsmedia_key_configured?: boolean;
   eagainsmedia_api_key_encrypted?: string;
-  five_sim_rate_to_ngn: number; // 5sim native currency unit -> NGN
-  five_sim_markup_percentage: number; // e.g. 50 for +50%
+  five_sim_rate_to_ngn: number; // USD -> NGN override for 5sim; 0/unset = use exchange_rate_usd_ngn
+  five_sim_markup_percentage: number; // e.g. 30 for +30%
+  five_sim_markup_migrated_30?: boolean; // one-time 50 -> 30 default migration flag
   fivesim_key_configured?: boolean;
   fivesim_api_key_encrypted?: string;
   herosms_api_url?: string;

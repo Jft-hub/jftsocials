@@ -31,7 +31,6 @@ interface ProductItem {
   name: string;
   category: string;
   count: number;
-  price_native: number;
   price_ngn: number;
   price_usdt: number;
 }
@@ -42,7 +41,7 @@ export const VirtualNumbersView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'buy' | 'orders'>('buy');
   const [countries, setCountries] = useState<Record<string, any>>({});
   const [products, setProducts] = useState<ProductItem[]>([]);
-  const [rateUsed, setRateUsed] = useState<number>(0);
+  const [numbersUnavailable, setNumbersUnavailable] = useState<boolean>(false);
 
   // Always-available country list so the picker never vanishes, even if the
   // live country feed hiccups. Live results override these when they arrive.
@@ -102,8 +101,8 @@ export const VirtualNumbersView: React.FC = () => {
         .then(data => {
           if (cancelled) return;
           if (data.success && data.products) {
+            setNumbersUnavailable(false);
             setProducts(data.products);
-            if (typeof data.rate_used_ngn === 'number') setRateUsed(data.rate_used_ngn);
             // If previous selection is no longer valid, pick the first available
             if (data.products.length > 0) {
               const exists = data.products.find((p: ProductItem) => p.name === selectedProduct);
@@ -111,6 +110,10 @@ export const VirtualNumbersView: React.FC = () => {
                 setSelectedProduct(data.products[0].name);
               }
             }
+          } else {
+            // 503 from the server: numbers are paused (no live provider or no price rate).
+            setNumbersUnavailable(true);
+            setProducts([]);
           }
         })
         .catch(console.error)
@@ -590,9 +593,9 @@ export const VirtualNumbersView: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                {rateUsed > 0 && (
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Prices: native units × ₦{rateUsed} + 50% (rate set in Admin → Settings → 5)
+                {numbersUnavailable && (
+                  <p className="text-[11px] text-rose-400 mt-1">
+                    Virtual numbers temporarily unavailable. Please try again later.
                   </p>
                 )}
               </div>
@@ -648,7 +651,7 @@ export const VirtualNumbersView: React.FC = () => {
                         <div className="truncate">
                           <div className="font-semibold text-xs text-white capitalize truncate">{p.name}</div>
                           <div className="text-[10px] text-slate-400">
-                            {(p.count ?? 0).toLocaleString()} available • {p.price_native} units
+                            {(p.count ?? 0).toLocaleString()} available
                           </div>
                         </div>
 

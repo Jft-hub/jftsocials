@@ -6,9 +6,9 @@ import dotenv from 'dotenv';
 import { db, hashPassword, verifyPassword, encryptSecret, decryptSecret } from './server/db.js';
 import { PeakerrClient, ServiceProvider } from './server/peakerrClient.js';
 import { EagainsmediaClient } from './server/eagainsmediaClient.js';
-import { FiveSimClient } from './server/fiveSimClient.js';
+import { FiveSimClient, NumberProviderUnavailableError } from './server/fiveSimClient.js';
 import { HeroSmsClient } from './server/heroSmsClient.js';
-import { calculateOrderPrice, calculateNumberPrice, roundMoney } from './server/pricingEngine.js';
+import { calculateOrderPrice, calculateNumberPrice, roundMoney, getNumberProviderRate, isNumberPricingConfigured } from './server/pricingEngine.js';
 import { AutomationEngine } from './server/automation.js';
 import { User, Currency, NumberOrder, AccountCategory, AccountListing, AccountOrder } from './src/types/index.js';
 import { verifyMirrorAtBoot } from './server/supabaseMirror.js';
@@ -1008,65 +1008,45 @@ app.post('/api/orders/:id/cancel', authenticate, async (req: AuthenticatedReques
 
 app.get('/api/numbers/countries', async (req, res) => {
   try {
+    if (!isNumberPricingConfigured(db.getSettings())) {
+      return res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
+    }
     const countries = await fiveSim.getCountries();
     res.json({ success: true, countries });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] countries unavailable:', err?.message || err);
+    res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
   }
 });
 
 app.get('/api/numbers/products', async (req, res) => {
   try {
+    const settings = db.getSettings();
+    // No rate = no listing. There are no hard-coded fallback prices.
+    if (!isNumberPricingConfigured(settings)) {
+      return res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
+    }
     const country = (req.query.country as string) || 'any';
     const operator = (req.query.operator as string) || 'any';
     const rawProducts = await fiveSim.getProducts(country, operator);
-    const settings = db.getSettings();
 
     // Only sellable inventory: zero-stock products are hidden so customers
-    // never pay for a number that isn't there (backend double-guard; the
-    // order endpoint rejects Qty 0 independently).
-    // 5sim units are dollar-scale: fallbacks use the USD rate, never a
-    // hardcoded 25 (that relic underpriced everything ~60x).
-    const fallbackRate = settings.five_sim_rate_to_ngn > 0 ? settings.five_sim_rate_to_ngn : 1500;
-    const fallbackMarkup = 1 + (settings.five_sim_markup_percentage > 0 ? settings.five_sim_markup_percentage : 50) / 100;
+    // never pay for a number that isn't there. Provider cost and rate are
+    // never sent to the customer.
     const products = Object.entries(rawProducts)
       .filter(([, details]) => (details.Qty || 0) > 0)
-      .map(([name, details]) => {
-      let priceNgn = 0;
-      let priceUsdt = 0;
-      try {
-        const pricingNgn = calculateNumberPrice(details.Price, 'NGN', settings);
-        priceNgn = pricingNgn.customerPrice;
-      } catch {
-        priceNgn = details.Price * fallbackRate * fallbackMarkup;
-      }
-
-      try {
-        const pricingUsdt = calculateNumberPrice(details.Price, 'USDT', settings);
-        priceUsdt = pricingUsdt.customerPrice;
-      } catch {
-        priceUsdt = Number(((details.Price * fallbackRate * fallbackMarkup) / 1500).toFixed(2));
-      }
-
-      return {
+      .map(([name, details]) => ({
         name,
         category: details.Category || 'Other',
         count: details.Qty || 0,
-        price_native: details.Price,
-        price_ngn: priceNgn,
-        price_usdt: priceUsdt
-      };
-    });
+        price_ngn: calculateNumberPrice(details.Price, 'NGN', settings).customerPrice,
+        price_usdt: calculateNumberPrice(details.Price, 'USDT', settings).customerPrice
+      }));
 
-    res.json({
-      success: true,
-      products,
-      // Exposed so the storefront (and you) can verify the math:
-      // customer price = native units x this rate + 50% markup.
-      rate_used_ngn: settings.five_sim_rate_to_ngn || 0
-    });
+    res.json({ success: true, products });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] products unavailable:', err?.message || err);
+    res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
   }
 });
 
@@ -1085,8 +1065,8 @@ app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: Authentic
     // 0. Provider readiness: never debit the customer for a number we cannot buy.
     // 5sim is prepaid-only (top-ups are manual on 5sim.net - no API funding),
     // so refuse early when our upstream balance can't cover this activation.
-    if (!fiveSim.isLive()) {
-      return res.status(503).json({ success: false, error: 'Virtual numbers are temporarily unavailable. Please try again later or contact support.' });
+    if (!fiveSim.isLive() || !isNumberPricingConfigured(settings)) {
+      return res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
     }
 
     // 1. Fetch live product price from 5sim
@@ -1142,7 +1122,13 @@ app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: Authentic
       // Stock/balance rejections are the customer's cue to pick another
       // route (400), not a server crash (500).
       const friendly = /no free numbers|out of stock|too low/i.test(reason);
-      return res.status(friendly ? 400 : 500).json({ success: false, error: friendly ? reason : `Failed to acquire number: ${reason}` });
+      const unavailable = providerErr instanceof NumberProviderUnavailableError;
+      return res.status(friendly ? 400 : unavailable ? 503 : 502).json({
+        success: false,
+        error: friendly
+          ? 'No free numbers right now for this route. Try another country or product.'
+          : 'Could not get a number right now. You have not been charged. Please try again shortly.'
+      });
     }
 
     // 5. Store NumberOrder in database
@@ -1162,6 +1148,9 @@ app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: Authentic
       sms_text: smsText,
       customer_charge: pricing.customerPrice,
       provider_cost: productInfo.Price,
+      provider_cost_native: productInfo.Price,
+      provider_currency: 'USD',
+      provider_cost_ngn: pricing.providerCostNGN,
       currency: orderCurrency,
       status: activation.status || 'PENDING',
       expires_at: activation.expires,
@@ -1173,7 +1162,11 @@ app.post('/api/numbers/order', moneyLimiter, authenticate, async (req: Authentic
 
     res.json({ success: true, order: newOrder });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('[Numbers] order error:', err?.message || err);
+    if (err instanceof NumberProviderUnavailableError) {
+      return res.status(503).json({ success: false, error: 'Virtual numbers temporarily unavailable' });
+    }
+    res.status(500).json({ success: false, error: 'Something went wrong placing this order. Please try again.' });
   }
 });
 
@@ -1908,6 +1901,7 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
         eagainsmedia_balance: eagainsBalance,
         eagainsmedia_balance_currency: eagainsCurrency,
         fivesim_balance: fivesimBalance,
+        numbers_pricing_configured: isNumberPricingConfigured(settings),
         provider_is_live: peakerr.isLive(),
         min_margin_ngn: settings.default_min_margin_ngn,
         default_markup_percentage: settings.default_markup_percentage
@@ -2624,6 +2618,38 @@ app.patch('/api/admin/support/tickets/:id/status', verifyAdmin, (req, res) => {
     return res.status(404).json({ success: false, error: 'Ticket not found' });
   }
   res.json({ success: true, ticket });
+});
+
+// Admin: live sanity-check of virtual number pricing using one real in-stock product
+app.get('/api/admin/numbers/price-preview', verifyAdmin, async (req, res) => {
+  try {
+    const settings = db.getSettings();
+    const rate = getNumberProviderRate(settings);
+    if (rate <= 0) {
+      return res.json({ success: true, configured: false, message: 'Set the USD to NGN rate' });
+    }
+    const raw = await fiveSim.getProducts('any', 'any');
+    const inStock = Object.entries(raw).filter(([, d]) => (d.Qty || 0) > 0 && d.Price > 0);
+    if (inStock.length === 0) {
+      return res.json({ success: true, configured: true, available: false, message: 'No in-stock product to preview right now' });
+    }
+    const [name, details] = inStock.find(([n]) => n === 'whatsapp') || inStock.find(([n]) => n === 'telegram') || inStock[0];
+    const priced = calculateNumberPrice(details.Price, 'NGN', settings);
+    res.json({
+      success: true,
+      configured: true,
+      available: true,
+      product: name,
+      raw_price: details.Price,
+      raw_currency: 'USD',
+      rate,
+      markup_percentage: settings.five_sim_markup_percentage,
+      cost_ngn: priced.providerCostNGN,
+      customer_price_ngn: priced.customerPrice
+    });
+  } catch (err: any) {
+    res.json({ success: true, configured: true, available: false, message: 'Live preview unavailable right now' });
+  }
 });
 
 // Admin System Settings

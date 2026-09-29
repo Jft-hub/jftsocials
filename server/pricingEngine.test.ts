@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateOrderPrice } from './pricingEngine.js';
+import { calculateOrderPrice, calculateNumberPrice, isNumberPricingConfigured } from './pricingEngine.js';
 import type { Service, SystemSettings, Currency } from '../src/types/index.js';
 
 const settings = {
@@ -68,4 +68,33 @@ test('USDT conversion happens after the NGN price is computed', () => {
   assert.equal(r.currency, 'USDT');
   assert.equal(r.customer_price, 3.47); // 5200 / 1500
   assert.equal(price(F, 1200, 1000, 'USDT').customer_price, 1.67); // 2500 / 1500
+});
+
+// ---- Virtual numbers (5sim is USD-scale; site flat rate 1500; +30%) ----
+const numSettings = (over: Record<string, unknown> = {}) => ({
+  exchange_rate_usd_ngn: 1500,
+  five_sim_rate_to_ngn: 0,
+  five_sim_markup_percentage: 30,
+  ...over
+}) as unknown as SystemSettings;
+
+test('numbers: raw 0.09 USD x 1500 x 1.30 = 175.50 NGN using the site rate', () => {
+  const r = calculateNumberPrice(0.09, 'NGN', numSettings());
+  assert.equal(r.customerPrice, 175.5);
+  assert.equal(r.providerCostNGN, 135);
+});
+
+test('numbers: explicit rate override (raw 10, rate 20, markup 30 -> 260.00)', () => {
+  assert.equal(calculateNumberPrice(10, 'NGN', numSettings({ five_sim_rate_to_ngn: 20 })).customerPrice, 260);
+});
+
+test('numbers: USDT price is the NGN customer price / site rate', () => {
+  assert.equal(calculateNumberPrice(1, 'USDT', numSettings()).customerPrice, 1.3);
+  assert.equal(calculateNumberPrice(0.09, 'USDT', numSettings()).customerPrice, 0.12);
+});
+
+test('numbers: no rate at all throws and is reported as not configured', () => {
+  const none = numSettings({ exchange_rate_usd_ngn: 0, five_sim_rate_to_ngn: 0 });
+  assert.equal(isNumberPricingConfigured(none), false);
+  assert.throws(() => calculateNumberPrice(1, 'NGN', none));
 });

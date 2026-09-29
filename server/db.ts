@@ -74,7 +74,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   eagainsmedia_api_url: 'https://engainsmedia.com/api/v2',
   eagainsmedia_key_configured: false,
   five_sim_rate_to_ngn: 0,
-  five_sim_markup_percentage: 50,
+  five_sim_markup_percentage: 30,
   fivesim_key_configured: false,
   herosms_api_url: 'https://hero-sms.com/stubs/handler_api.php',
   herosms_key_configured: false,
@@ -257,7 +257,7 @@ class Database {
       'usdt_network', 'maintenance_mode', 'maintenance_message',
       'peakerr_api_url', 'peakerr_key_configured', 'peakerr_api_key_encrypted',
       'eagainsmedia_api_url', 'eagainsmedia_key_configured', 'eagainsmedia_api_key_encrypted',
-      'five_sim_rate_to_ngn', 'five_sim_markup_percentage',
+      'five_sim_rate_to_ngn', 'five_sim_markup_percentage', 'five_sim_markup_migrated_30',
       'fivesim_key_configured', 'fivesim_api_key_encrypted',
       'herosms_api_url', 'herosms_key_configured', 'herosms_api_key_encrypted',
       'sync_interval_minutes', 'low_balance_threshold_usd'
@@ -460,6 +460,13 @@ class Database {
           }
           if (parsed.settings && parsed.settings.min_deposit_ngn === 1000) {
             parsed.settings.min_deposit_ngn = 100;
+          }
+          // One-time migration: virtual-number markup default moved 50 -> 30.
+          // The flag stops it being re-applied on every boot, so a later admin
+          // change is never overwritten.
+          if (parsed.settings && !parsed.settings.five_sim_markup_migrated_30) {
+            parsed.settings.five_sim_markup_percentage = 30;
+            parsed.settings.five_sim_markup_migrated_30 = true;
           }
           return parsed;
         }

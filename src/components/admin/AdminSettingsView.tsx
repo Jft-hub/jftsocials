@@ -38,10 +38,12 @@ export const AdminSettingsView: React.FC = () => {
   // 5sim Provider & Virtual Numbers
   const [fivesimApiKey, setFivesimApiKey] = useState('');
   const [fivesimConfigured, setFivesimConfigured] = useState(false);
-  // 5sim prices are dollar-scale units: 1 unit ≈ $1 ≈ ₦1,500.
-  const [fivesimNgnRate, setFivesimNgnRate] = useState<number>(1500);
-  const [fivesimMarkupPercent, setFivesimMarkupPercent] = useState<number>(50);
-  const [fivesimMinMarginNgn, setFivesimMinMarginNgn] = useState<number>(200);
+  // 5sim prices are in USD. Customer price (NGN) = USD x rate x (1 + markup%).
+  // Rate 0 = use the site's flat USD -> NGN rate.
+  const [fivesimNgnRate, setFivesimNgnRate] = useState<number>(0);
+  const [fivesimMarkupPercent, setFivesimMarkupPercent] = useState<number>(30);
+  const [siteUsdRate, setSiteUsdRate] = useState<number>(0);
+  const [numberPreview, setNumberPreview] = useState<any>(null);
 
   // Status & Testing states
   const [saving, setSaving] = useState(false);
@@ -70,13 +72,25 @@ export const AdminSettingsView: React.FC = () => {
           setEagainsmediaConfigured(Boolean(s.eagainsmedia_key_configured));
 
           setFivesimConfigured(Boolean(s.fivesim_key_configured));
-          setFivesimNgnRate(s.five_sim_rate_to_ngn ?? s.fivesim_ngn_rate ?? 1500);
-          setFivesimMarkupPercent(s.five_sim_markup_percentage ?? s.fivesim_markup_percent ?? 50);
-          setFivesimMinMarginNgn(s.fivesim_min_margin_ngn || 200);
+          setFivesimNgnRate(s.five_sim_rate_to_ngn ?? s.fivesim_ngn_rate ?? 0);
+          setFivesimMarkupPercent(s.five_sim_markup_percentage ?? s.fivesim_markup_percent ?? 30);
+          setSiteUsdRate(Number(s.exchange_rate_usd_ngn) || 0);
         }
       })
       .catch(console.error);
+    loadNumberPreview();
   }, [token]);
+
+  const loadNumberPreview = () => {
+    if (!token) return;
+    fetch('/api/admin/numbers/price-preview', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setNumberPreview(d); })
+      .catch(() => {});
+  };
+
+  // Effective rate the server will use for numbers (override, else the site rate).
+  const effectiveNumberRate = Number(fivesimNgnRate) > 0 ? Number(fivesimNgnRate) : siteUsdRate;
 
   const handleTestConnection = async (provider: 'peakerr' | 'eagainsmedia' | 'fivesim') => {
     if (!token) return;
@@ -92,6 +106,7 @@ export const AdminSettingsView: React.FC = () => {
       });
       const data = await res.json();
       setTestResults(prev => ({ ...prev, [provider]: data }));
+      if (provider === 'fivesim') loadNumberPreview();
       if (data.success && !data.error) {
         showToast(
           `${data.provider}: Online! Balance: ${data.balance !== undefined ? data.balance : 'N/A'} ${data.currency || ''} (${data.latency_ms}ms)`,
@@ -121,8 +136,7 @@ export const AdminSettingsView: React.FC = () => {
         peakerr_api_url: peakerrApiUrl,
         eagainsmedia_api_url: eagainsmediaApiUrl,
         five_sim_rate_to_ngn: Number(fivesimNgnRate),
-        five_sim_markup_percentage: Number(fivesimMarkupPercent),
-        fivesim_min_margin_ngn: Number(fivesimMinMarginNgn)
+        five_sim_markup_percentage: Number(fivesimMarkupPercent)
       };
 
       if (peakerrApiKey.trim()) {
@@ -412,17 +426,32 @@ export const AdminSettingsView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                5 Unit Exchange Rate to NGN (₦ per $1 unit — usually ~1,500)
+                USD to NGN rate for numbers (₦ per $1) — 0 uses the site rate
               </label>
               <input
                 type="number"
                 step="0.1"
-                required
+                min="0"
                 value={fivesimNgnRate}
                 onChange={e => setFivesimNgnRate(Number(e.target.value))}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Converts 5 native currency units to Nigerian Naira.</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                5sim prices are in USD. Currently using ₦{effectiveNumberRate > 0 ? effectiveNumberRate.toLocaleString() : '—'} per $1.
+              </p>
+              {effectiveNumberRate <= 0 && (
+                <p className="text-[11px] font-semibold text-rose-400 mt-1">
+                  Set the USD to NGN rate. Virtual numbers are paused until it is set.
+                </p>
+              )}
+              {numberPreview?.available && (
+                <p className="text-[11px] font-mono text-emerald-300 mt-2">
+                  {numberPreview.product}: raw {numberPreview.raw_price} {numberPreview.raw_currency} → ₦{Number(numberPreview.cost_ngn).toLocaleString('en-US', { minimumFractionDigits: 2 })} cost → ₦{Number(numberPreview.customer_price_ngn).toLocaleString('en-US', { minimumFractionDigits: 2 })} customer price
+                </p>
+              )}
+              {numberPreview && numberPreview.configured && !numberPreview.available && (
+                <p className="text-[10px] text-slate-500 mt-2">{numberPreview.message}</p>
+              )}
             </div>
 
             <div>
@@ -436,21 +465,7 @@ export const AdminSettingsView: React.FC = () => {
                 onChange={e => setFivesimMarkupPercent(Number(e.target.value))}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Added profit margin on top of upstream number cost.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Minimum Margin Floor (₦)
-              </label>
-              <input
-                type="number"
-                required
-                value={fivesimMinMarginNgn}
-                onChange={e => setFivesimMinMarginNgn(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">Minimum profit guaranteed per virtual number order.</p>
+              <p className="text-[10px] text-slate-500 mt-1">Added profit margin on top of upstream number cost (default 30%). No minimum floor.</p>
             </div>
           </div>
         </div>

@@ -173,24 +173,49 @@ export function sanitizePricingForCustomer(calc: PriceCalculationResult) {
 }
 
 /**
- * Calculates selling price for single-unit virtual numbers from 5sim.net.
+ * 5sim guest/product prices are dollar-scale (USD). The website runs on a flat
+ * USD -> NGN rate (settings.exchange_rate_usd_ngn, 1500 by default). An admin
+ * may set a dedicated five_sim_rate_to_ngn override; when it is 0 / unset the
+ * site rate is used. Returns 0 when no usable rate exists (numbers must then
+ * not be listed or sold).
+ */
+export function getNumberProviderRate(settings: SystemSettings): number {
+  if (settings.five_sim_rate_to_ngn && settings.five_sim_rate_to_ngn > 0) return settings.five_sim_rate_to_ngn;
+  if (settings.exchange_rate_usd_ngn && settings.exchange_rate_usd_ngn > 0) return settings.exchange_rate_usd_ngn;
+  return 0;
+}
+
+export function isNumberPricingConfigured(settings: SystemSettings): boolean {
+  return getNumberProviderRate(settings) > 0;
+}
+
+/**
+ * Calculates selling price for single-unit virtual numbers.
+ *   customer NGN  = round2(providerPriceUSD x rate x (1 + markup%))   (markup default 30)
+ *   customer USDT = customer NGN / exchange_rate_usd_ngn
+ * No minimum-margin floor. Throws when no rate is configured - callers must
+ * answer 503, never fall back to a made-up rate.
  */
 export function calculateNumberPrice(
   providerCostNative: number,
   currency: Currency,
   settings: SystemSettings
 ): { customerPrice: number; providerCostNGN: number } {
-  if (!settings.five_sim_rate_to_ngn || settings.five_sim_rate_to_ngn <= 0) {
-    throw new Error('5sim exchange rate is not configured. An admin must set it in Settings before virtual numbers can be sold.');
+  const rate = getNumberProviderRate(settings);
+  if (rate <= 0) {
+    throw new Error('Virtual number pricing rate is not configured. An admin must set the USD to NGN rate in Settings.');
   }
-  const providerCostNGN = roundMoney(providerCostNative * settings.five_sim_rate_to_ngn);
-  const markup = roundMoney(providerCostNGN * (settings.five_sim_markup_percentage / 100));
-  const customerPriceNGN = roundMoney(providerCostNGN + markup);
+  const markupPct = typeof settings.five_sim_markup_percentage === 'number'
+    && isFinite(settings.five_sim_markup_percentage)
+    && settings.five_sim_markup_percentage >= 0
+    ? settings.five_sim_markup_percentage
+    : 30;
+  const providerCostNGN = roundMoney(providerCostNative * rate);
+  const customerPriceNGN = roundMoney(providerCostNative * rate * (1 + markupPct / 100));
 
   if (currency === 'USDT') {
-    const exchangeRate = settings.exchange_rate_usd_ngn > 0 ? settings.exchange_rate_usd_ngn : 1500;
+    const exchangeRate = settings.exchange_rate_usd_ngn > 0 ? settings.exchange_rate_usd_ngn : rate;
     return { customerPrice: roundMoney(customerPriceNGN / exchangeRate), providerCostNGN };
   }
   return { customerPrice: customerPriceNGN, providerCostNGN };
 }
-

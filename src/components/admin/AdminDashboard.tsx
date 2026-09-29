@@ -210,6 +210,11 @@ export const AdminDashboard: React.FC = () => {
           <div className="text-[11px] text-slate-400">
             Virtual numbers wallet
           </div>
+          {stats?.numbers_pricing_configured === false && (
+            <div className="text-[11px] font-semibold text-rose-400">
+              Set the USD to NGN rate — virtual numbers are paused.
+            </div>
+          )}
         </div>
 
         <div className="p-5 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-2">
