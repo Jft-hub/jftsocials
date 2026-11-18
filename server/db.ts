@@ -57,10 +57,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   primary_domain: 'jftsocials.online',
   whatsapp_support_number: '+2347018409997',
   default_markup_percentage: 20, // 20%
-  default_min_margin_ngn: 10,    // ₦10 minimum platform margin
+  default_min_margin_ngn: 10,    // â¦10 minimum platform margin
   payment_fee_percentage: 3,     // 3% payment/deposit fee
   payment_fee_enabled: true,
-  exchange_rate_usd_ngn: 1500,   // ₦1,500 = 1 USDT
+  exchange_rate_usd_ngn: 1500,   // â¦1,500 = 1 USDT
   min_deposit_ngn: 100,
   max_deposit_ngn: 5000000,
   min_deposit_usdt: 5,
@@ -557,7 +557,7 @@ class Database {
         id: 'wal_demo_ngn',
         user_id: demoUser.id,
         currency: 'NGN',
-        available_balance: 75000, // ₦75,000 starting wallet
+        available_balance: 75000, // â¦75,000 starting wallet
         created_at: now,
         updated_at: now
       },
@@ -589,7 +589,7 @@ class Database {
         name: 'Instagram HQ Followers [Instant Start + 30D Refill Guarantee]',
         description: 'Instant start within 5-15 mins. Real profiles with posts and profile pictures. 30 days automated refill guarantee.',
         category_id: 'cat_ig',
-        provider_rate: 1425, // ₦1,425 per 1k (Peakerr rate)
+        provider_rate: 1425, // â¦1,425 per 1k (Peakerr rate)
         min_quantity: 10,
         max_quantity: 50000,
         refill_supported: true,
@@ -606,7 +606,7 @@ class Database {
         name: 'Instagram Real Active Post Likes [Super Fast Speed]',
         description: 'Instant start post likes. Improves algorithmic reach and explorer page discovery.',
         category_id: 'cat_ig',
-        provider_rate: 525, // ₦525 per 1k
+        provider_rate: 525, // â¦525 per 1k
         min_quantity: 20,
         max_quantity: 100000,
         refill_supported: true,
@@ -623,7 +623,7 @@ class Database {
         name: 'Instagram Video & Reels Views [High Retention]',
         description: 'Super fast delivery. High watch time to boost Instagram Reels algorithm rankings.',
         category_id: 'cat_ig',
-        provider_rate: 225, // ₦225 per 1k
+        provider_rate: 225, // â¦225 per 1k
         min_quantity: 100,
         max_quantity: 1000000,
         refill_supported: false,
@@ -640,7 +640,7 @@ class Database {
         name: 'TikTok Genuine Followers [Real Accounts + 60D Refill]',
         description: 'High grade TikTok followers suitable for LIVE streaming unlocking (1,000+ required) and Creator Rewards.',
         category_id: 'cat_tk',
-        provider_rate: 2700, // ₦2,700 per 1k
+        provider_rate: 2700, // â¦2,700 per 1k
         min_quantity: 10,
         max_quantity: 30000,
         refill_supported: true,
@@ -657,7 +657,7 @@ class Database {
         name: 'TikTok High Retention FYP Video Views [Algorithm Booster]',
         description: 'Instant start. Delivered from organic IP pools to optimize For You Page placement.',
         category_id: 'cat_tk',
-        provider_rate: 120, // ₦120 per 1k
+        provider_rate: 120, // â¦120 per 1k
         min_quantity: 500,
         max_quantity: 5000000,
         refill_supported: false,
@@ -674,7 +674,7 @@ class Database {
         name: 'YouTube Watch Time Views [Monetization Eligible]',
         description: 'Safe monetization views with 3 to 5 minutes retention per view. Natural gradual distribution.',
         category_id: 'cat_yt',
-        provider_rate: 3600, // ₦3,600 per 1k
+        provider_rate: 3600, // â¦3,600 per 1k
         min_quantity: 500,
         max_quantity: 100000,
         refill_supported: true,
@@ -691,7 +691,7 @@ class Database {
         name: 'Telegram Channel Members [Non-Drop Global]',
         description: 'HQ Telegram subscribers for public and private channels or groups.',
         category_id: 'cat_tg',
-        provider_rate: 1275, // ₦1,275 per 1k
+        provider_rate: 1275, // â¦1,275 per 1k
         min_quantity: 100,
         max_quantity: 50000,
         refill_supported: true,
@@ -879,7 +879,7 @@ class Database {
         user_id: demoUser.id,
         type: 'deposit',
         title: 'Wallet Funded Successfully',
-        message: '₦83,125.00 has been credited to your JFT Socials NGN wallet.',
+        message: 'â¦83,125.00 has been credited to your JFT Socials NGN wallet.',
         read: true,
         link: '/wallet',
         created_at: new Date(Date.now() - 90000000).toISOString()
@@ -1311,6 +1311,21 @@ class Database {
     referenceId: string,
     description: string
   ): { success: boolean; transaction: WalletTransaction; newBalance: number } {
+    // Idempotency guard: a Paystack retry or repeated verification using the
+    // same reference must never increase the wallet more than once.
+    if (referenceType === 'payment') {
+      const existing = this.data.wallet_transactions.find(
+        t => t.reference_type === 'payment' && t.reference_id === referenceId && t.status === 'completed'
+      );
+      if (existing) {
+        if (existing.user_id !== userId || existing.currency !== currency) {
+          throw new Error('Payment reference is already associated with a different wallet.');
+        }
+        const currentWallet = this.getWallet(userId, currency);
+        return { success: true, transaction: existing, newBalance: currentWallet.available_balance };
+      }
+    }
+
     const wallet = this.getWallet(userId, currency);
     const before = wallet.available_balance;
     const after = Math.round((before + amount + Number.EPSILON) * 100) / 100;
@@ -1573,7 +1588,7 @@ class Database {
     this.createNotification({
       user_id: order.user_id,
       type: 'refund',
-      title: 'Order Failed — Automatically Refunded',
+      title: 'Order Failed â Automatically Refunded',
       message: `We couldn't complete your order ${order.id}, so it's been cancelled and ${order.currency} ${refundAmount.toLocaleString()} has been refunded to your wallet. Reason: ${reason}`,
       read: false,
       link: '/orders'
@@ -1882,7 +1897,7 @@ class Database {
     return newListings.length;
   }
 
-  // Claims one available listing for a category and marks it sold, atomically —
+  // Claims one available listing for a category and marks it sold, atomically â
   // no `await` happens between reading availability and writing the sold state,
   // so two simultaneous purchase requests can never claim the same listing
   // (Node's event loop can't interleave synchronous code).
