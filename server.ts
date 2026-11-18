@@ -17,24 +17,6 @@ import { maybeRestoreFromMirror } from './server/supabaseRestore.js';
 
 dotenv.config();
 
-// ===== TEMP RECOVERY — REMOVE THIS BLOCK ONCE YOU'RE BACK IN =====
-(() => {
-  const RECOVERY_EMAIL = 'admin@jftsocials.online';
-  const RECOVERY_HASH = '$2b$12$3LZIJZU3NBQwnJeHyYp/nuJvGhAFuGMhOvw.V6H3f/Wkef.HDmA5y';
-  const user = db.findUserByEmail(RECOVERY_EMAIL);
-  if (user) {
-    db.updateUser(user.id, {
-      password_hash: RECOVERY_HASH,
-      role: 'superadmin',
-      status: 'active'
-    });
-    console.log('[RECOVERY] Admin password force-reset for', RECOVERY_EMAIL);
-  } else {
-    console.log('[RECOVERY] No user found with email', RECOVERY_EMAIL);
-  }
-})();
-// ===== END TEMP RECOVERY BLOCK =====
-
 const app = express();
 const PORT = 3000;
 
@@ -43,7 +25,11 @@ const PORT = 3000;
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({
+  limit: '200kb',
+  // Preserve the exact request bytes so Paystack webhook signatures can be verified.
+  verify: (req: any, _res, buf) => { req.rawBody = Buffer.from(buf); }
+}));
 app.use(express.urlencoded({ extended: true, limit: '200kb' }));
 
 // ---- Gzip responses (the 1MB+ JS bundle shrinks to ~1/4 over the wire) ----
@@ -102,7 +88,7 @@ if (persistedPeakerrKey && peakerr.isLive()) {
 } else if (process.env.PEAKERR_API_KEY && peakerr.isLive()) {
   console.log('[Startup] Loaded Peakerr API key from environment variable.');
 } else {
-  console.info('[Startup] No live Peakerr API key configured — running in demo/mock mode.');
+  console.info('[Startup] No live Peakerr API key configured â running in demo/mock mode.');
 }
 
 const persistedEagainsmediaKey = db.getProviderApiKey('eagainsmedia');
@@ -389,7 +375,7 @@ app.post('/api/auth/login', (req, res) => {
 
     const passwordOk = verifyPassword(password, user.password_hash, (newHash) => {
       // Transparent migration: this account was still on the old SHA-256
-      // scheme, and the password just checked out — upgrade it to bcrypt now.
+      // scheme, and the password just checked out â upgrade it to bcrypt now.
       user.password_hash = newHash;
       db.updateUser(user.id, { password_hash: newHash });
     });
@@ -720,7 +706,7 @@ app.post('/api/orders', moneyLimiter, authenticate, async (req: AuthenticatedReq
     if (availableBalance < pricing.customer_price) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient ${orderCurrency} balance. Required: ${orderCurrency === 'NGN' ? '₦' : ''}${pricing.customer_price.toLocaleString()} ${orderCurrency}, Available: ${orderCurrency === 'NGN' ? '₦' : ''}${availableBalance.toLocaleString()} ${orderCurrency}. Please fund your wallet first.`
+        error: `Insufficient ${orderCurrency} balance. Required: ${orderCurrency === 'NGN' ? 'â¦' : ''}${pricing.customer_price.toLocaleString()} ${orderCurrency}, Available: ${orderCurrency === 'NGN' ? 'â¦' : ''}${availableBalance.toLocaleString()} ${orderCurrency}. Please fund your wallet first.`
       });
     }
 
@@ -874,7 +860,7 @@ app.post('/api/orders', moneyLimiter, authenticate, async (req: AuthenticatedReq
     db.createNotification({
       user_id: user.id,
       type: 'order',
-      title: dispatchFailed ? 'Order Received — Processing' : 'Order Placed Successfully',
+      title: dispatchFailed ? 'Order Received â Processing' : 'Order Placed Successfully',
       message: dispatchFailed
         ? `Your order ${newOrder.id} for ${service.name} (${numQuantity.toLocaleString()} units) has been received and is being processed. We'll notify you once it's confirmed.`
         : `Your order ${newOrder.id} for ${service.name} (${numQuantity.toLocaleString()} units) is now in progress.`,
@@ -1261,7 +1247,7 @@ app.get('/api/accounts/categories', (req, res) => {
   res.json({ success: true, categories });
 });
 
-// Purchase — the critical ordering: debit the wallet FIRST, and only reveal
+// Purchase â the critical ordering: debit the wallet FIRST, and only reveal
 // credentials if that succeeds. If the wallet debit throws (insufficient
 // balance), execution never reaches claimAccountListing, so nothing is
 // ever handed out unpaid.
@@ -1281,7 +1267,7 @@ app.post('/api/accounts/buy', moneyLimiter, authenticate, (req: AuthenticatedReq
 
     const orderId = `acctord_${crypto.randomBytes(8).toString('hex')}`;
 
-    // 1. Payment first — throws on insufficient balance, aborting the whole request.
+    // 1. Payment first â throws on insufficient balance, aborting the whole request.
     //    Nothing (credentials, logs, history) is revealed before this succeeds.
     db.debitWallet(user.id, 'NGN', category.price_ngn, 'order', orderId, `Account purchase: ${category.name}`);
 
@@ -1314,7 +1300,7 @@ app.post('/api/accounts/buy', moneyLimiter, authenticate, (req: AuthenticatedReq
       user_id: user.id,
       type: 'order',
       title: 'Account Purchased',
-      message: `Your ${category.name} is ready — view it under "My Accounts".`,
+      message: `Your ${category.name} is ready â view it under "My Accounts".`,
       read: false,
       link: '/accounts'
     });
@@ -1333,7 +1319,7 @@ app.post('/api/accounts/buy', moneyLimiter, authenticate, (req: AuthenticatedReq
   }
 });
 
-// My Accounts — customers can come back and view what they've bought at any time
+// My Accounts â customers can come back and view what they've bought at any time
 app.get('/api/accounts/my-purchases', authenticate, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
   const orders = db.getAccountOrdersByUser(user.id);
@@ -1382,14 +1368,14 @@ app.post('/api/payments/paystack/initialize', moneyLimiter, authenticate, (req: 
     if (isNaN(numAmount) || numAmount < settings.min_deposit_ngn) {
       return res.status(400).json({
         success: false,
-        error: `Minimum NGN deposit is ₦${settings.min_deposit_ngn.toLocaleString()}.`
+        error: `Minimum NGN deposit is â¦${settings.min_deposit_ngn.toLocaleString()}.`
       });
     }
 
     if (numAmount > settings.max_deposit_ngn) {
       return res.status(400).json({
         success: false,
-        error: `Maximum NGN deposit is ₦${settings.max_deposit_ngn.toLocaleString()}.`
+        error: `Maximum NGN deposit is â¦${settings.max_deposit_ngn.toLocaleString()}.`
       });
     }
 
@@ -1431,118 +1417,161 @@ app.post('/api/payments/paystack/initialize', moneyLimiter, authenticate, (req: 
   }
 });
 
-// Paystack Server-side Verification & Instant Wallet Credit (supports GET & POST)
+// Paystack server-side verification, webhook processing, and idempotent wallet credit.
+// A successful Paystack charge is only credited to the user stored on the original
+// payment record. Never trust the currently logged-in user as the payment owner.
+async function verifyAndCreditPaystack(reference: string): Promise<{
+  credited: boolean;
+  alreadyCredited: boolean;
+  creditedAmount: number;
+  newBalance: number;
+  payment: any;
+}> {
+  const payment = db.findPaymentByReference(reference);
+  if (!payment || payment.provider !== 'paystack') {
+    throw new Error('Payment record not found.');
+  }
+
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey) throw new Error('PAYSTACK_SECRET_KEY is not configured.');
+
+  const verifyResponse = await fetch(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+    { method: 'GET', headers: { Authorization: `Bearer ${secretKey}` } }
+  );
+  const verifyJson: any = await verifyResponse.json();
+  if (!verifyResponse.ok || !verifyJson?.status || !verifyJson?.data) {
+    throw new Error(verifyJson?.message || 'Paystack could not verify this transaction.');
+  }
+
+  const paystackData = verifyJson.data;
+  if (paystackData.status !== 'success') {
+    throw new Error(`Paystack transaction is not successful (status: ${paystackData.status || 'unknown'}).`);
+  }
+  if (paystackData.reference !== reference) {
+    throw new Error('Paystack reference does not match the payment record.');
+  }
+  if (String(paystackData.currency || '').toUpperCase() !== 'NGN') {
+    throw new Error('Paystack transaction currency is not NGN.');
+  }
+
+  const expectedKobo = Math.round(Number(payment.amount) * 100);
+  const paidKobo = Number(paystackData.amount);
+  // Require exact amount equality; accepting over/under-payments can mis-credit wallets.
+  if (!Number.isFinite(paidKobo) || paidKobo !== expectedKobo) {
+    throw new Error(`Amount mismatch: expected â¦${Number(payment.amount).toLocaleString()}, Paystack confirmed â¦${(paidKobo / 100).toLocaleString()}.`);
+  }
+
+  const owner = db.findUserById(payment.user_id);
+  if (!owner) throw new Error('The original payment owner no longer exists. Contact support.');
+  if (paystackData.customer?.email && owner.email.toLowerCase() !== String(paystackData.customer.email).toLowerCase()) {
+    throw new Error('Paystack customer email does not match the original payment owner. Contact support.');
+  }
+
+  const creditAmount = Number(payment.amount) > 0 ? Number(payment.amount) : Number(payment.net_amount);
+  if (!Number.isFinite(creditAmount) || creditAmount <= 0) throw new Error('Invalid payment credit amount.');
+
+  // creditWallet now deduplicates payment references before changing the balance.
+  const hadLedgerEntry = db.getTransactions(payment.user_id).some(
+    (t: any) => t.reference_type === 'payment' && t.reference_id === reference && t.status === 'completed'
+  );
+  const creditResult = db.creditWallet(
+    payment.user_id,
+    'NGN',
+    creditAmount,
+    'payment',
+    reference,
+    `Paystack Deposit (â¦${creditAmount.toLocaleString()})`
+  );
+
+  // Mark confirmed only after the ledger credit call has completed successfully.
+  const updatedPayment = db.updatePayment(payment.id, {
+    status: 'confirmed',
+    updated_at: new Date().toISOString()
+  }) || payment;
+
+  if (!hadLedgerEntry) {
+    db.createNotification({
+      user_id: payment.user_id,
+      type: 'deposit',
+      title: 'Deposit Confirmed',
+      message: `â¦${creditAmount.toLocaleString()} has been credited to your NGN wallet.`,
+      read: false,
+      link: '/wallet'
+    });
+  }
+
+  return {
+    credited: !hadLedgerEntry,
+    alreadyCredited: hadLedgerEntry,
+    creditedAmount: creditAmount,
+    newBalance: creditResult.newBalance,
+    payment: updatedPayment
+  };
+}
+
+// Paystack webhook. Configure this URL in Paystack as:
+// https://YOUR-BACKEND-DOMAIN/api/payments/paystack/webhook
+app.post('/api/payments/paystack/webhook', async (req: Request, res: Response) => {
+  try {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    const signature = req.header('x-paystack-signature') || '';
+    const rawBody: Buffer | undefined = (req as any).rawBody;
+    if (!secretKey || !rawBody || !signature) {
+      return res.status(400).send('Invalid webhook request.');
+    }
+
+    const expected = crypto.createHmac('sha512', secretKey).update(rawBody).digest('hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    let receivedBuffer: Buffer;
+    try { receivedBuffer = Buffer.from(signature, 'hex'); } catch { return res.status(401).send('Invalid signature.'); }
+    if (expectedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
+      return res.status(401).send('Invalid signature.');
+    }
+
+    const event = req.body;
+    if (event?.event !== 'charge.success' || !event?.data?.reference) {
+      return res.status(200).send('Event ignored.');
+    }
+
+    await verifyAndCreditPaystack(String(event.data.reference));
+    return res.status(200).send('Webhook processed.');
+  } catch (err: any) {
+    console.error('[Paystack Webhook] Processing failed:', err?.message || err);
+    // Non-2xx tells Paystack to retry. The wallet credit is idempotent.
+    return res.status(500).send('Webhook processing failed.');
+  }
+});
+
+// Authenticated fallback verification (GET and POST remain supported).
 const handlePaystackVerify = async (req: AuthenticatedRequest, res: any) => {
   try {
     const user = req.user!;
     const reference = req.params?.reference || req.body?.reference || (req.query?.reference as string);
-
-    if (!reference) {
-      return res.status(400).json({ success: false, error: 'Transaction reference is required.' });
-    }
+    if (!reference) return res.status(400).json({ success: false, error: 'Transaction reference is required.' });
 
     const payment = db.findPaymentByReference(reference);
-    if (!payment) {
+    if (!payment || payment.provider !== 'paystack') {
       return res.status(404).json({ success: false, error: 'Payment record not found.' });
     }
-
     if (payment.user_id !== user.id && user.role !== 'admin' && user.role !== 'superadmin') {
       return res.status(403).json({ success: false, error: 'Unauthorized payment verification.' });
     }
 
-    if (payment.status === 'confirmed') {
-      const ngnWallet = db.getWallet(user.id, 'NGN');
-      return res.json({
-        success: true,
-        message: 'Payment already credited.',
-        credited_amount: payment.amount,
-        new_balance: ngnWallet?.available_balance || 0,
-        payment
-      });
-    }
-
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!secretKey) {
-      console.error('[Paystack] PAYSTACK_SECRET_KEY is not configured on the server.');
-      return res.status(500).json({ success: false, error: 'Payment provider is not configured. Please contact support.' });
-    }
-
-    // Call Paystack's real verification endpoint — never trust the client's word on payment status.
-    let paystackData: any;
-    try {
-      const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${secretKey}` }
-      });
-      const verifyJson = await verifyResponse.json();
-      if (!verifyResponse.ok || !verifyJson.status) {
-        return res.status(402).json({
-          success: false,
-          error: verifyJson?.message || 'Paystack could not verify this transaction.'
-        });
-      }
-      paystackData = verifyJson.data;
-    } catch (fetchErr: any) {
-      console.error('[Paystack] Verification request failed:', fetchErr);
-      return res.status(502).json({ success: false, error: 'Could not reach Paystack to verify this payment. Please try again.' });
-    }
-
-    if (!paystackData || paystackData.status !== 'success') {
-      payment.status = 'failed';
-      payment.updated_at = new Date().toISOString();
-      db.updatePayment(payment.id, payment);
-      return res.status(402).json({
-        success: false,
-        error: `Payment was not successful (Paystack status: ${paystackData?.status || 'unknown'}).`
-      });
-    }
-
-    // Cross-check the amount actually paid (Paystack returns kobo) against what we expect.
-    const expectedKobo = Math.round(payment.amount * 100);
-    const paidKobo = paystackData.amount;
-    if (paidKobo < expectedKobo) {
-      payment.status = 'failed';
-      payment.updated_at = new Date().toISOString();
-      db.updatePayment(payment.id, payment);
-      return res.status(402).json({
-        success: false,
-        error: `Amount mismatch: expected ₦${payment.amount.toLocaleString()}, Paystack confirmed ₦${(paidKobo / 100).toLocaleString()}.`
-      });
-    }
-
-    // Mark confirmed only after real verification has passed
-    payment.status = 'confirmed';
-    payment.updated_at = new Date().toISOString();
-    db.updatePayment(payment.id, payment);
-
-    // Credit NGN wallet with the deposited amount
-    const creditAmount = payment.amount > 0 ? payment.amount : payment.net_amount;
-    const creditResult = db.creditWallet(
-      user.id,
-      'NGN',
-      creditAmount,
-      'payment',
-      payment.reference,
-      `Paystack Deposit (₦${creditAmount.toLocaleString()})`
-    );
-
-    db.createNotification({
-      user_id: user.id,
-      type: 'deposit',
-      title: 'Deposit Confirmed',
-      message: `₦${creditAmount.toLocaleString()} has been credited to your NGN wallet.`,
-      read: false,
-      link: '/wallet'
-    });
-
-    res.json({
+    const result = await verifyAndCreditPaystack(reference);
+    return res.json({
       success: true,
-      message: 'Deposit verified and credited successfully.',
-      credited_amount: creditAmount,
-      new_balance: creditResult.newBalance
+      message: result.alreadyCredited ? 'Payment was already credited.' : 'Deposit verified and credited successfully.',
+      credited_amount: result.creditedAmount,
+      already_credited: result.alreadyCredited,
+      new_balance: result.newBalance,
+      payment: result.payment
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[Paystack Verify] Failed:', err?.message || err);
+    const message = err?.message || 'Could not verify this payment. Please contact support.';
+    const status = /not found/i.test(message) ? 404 : (/not successful|amount mismatch|currency|email does not match/i.test(message) ? 402 : 502);
+    return res.status(status).json({ success: false, error: message });
   }
 };
 
@@ -1829,7 +1858,7 @@ app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
     }
 
     // Provider balances are best-effort (upstream can be slow); null = unknown.
-    // Never fake a number: unknown renders as "—".
+    // Never fake a number: unknown renders as "â".
     let providerBalance: number | null = null;
     let providerCurrency = 'USD';
     let eagainsBalance: number | null = null;
@@ -2279,7 +2308,7 @@ app.post('/api/admin/services/sync', verifyAdmin, async (req: AuthenticatedReque
 // ADMIN ACCOUNT STORE & INVENTORY
 // -----------------------------
 
-// Create/update a category (e.g. set up "uk_tiktok" at ₦8,000)
+// Create/update a category (e.g. set up "uk_tiktok" at â¦8,000)
 app.post('/api/admin/accounts/categories', verifyAdmin, (req: AuthenticatedRequest, res) => {
   const { id, name, description, price_ngn, active } = req.body;
   if (!id || !name || price_ngn === undefined || price_ngn === null) {
@@ -2295,7 +2324,7 @@ app.post('/api/admin/accounts/categories', verifyAdmin, (req: AuthenticatedReque
   res.json({ success: true, category });
 });
 
-// Bulk stock upload — paste lines like "email:password", one per line
+// Bulk stock upload â paste lines like "email:password", one per line
 app.post('/api/admin/accounts/stock', verifyAdmin, (req: AuthenticatedRequest, res) => {
   const { category_id, raw_credentials } = req.body;
   if (!category_id || !raw_credentials) {
