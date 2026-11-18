@@ -17,6 +17,24 @@ import { maybeRestoreFromMirror } from './server/supabaseRestore.js';
 
 dotenv.config();
 
+// ===== TEMP RECOVERY — REMOVE THIS BLOCK ONCE YOU'RE BACK IN =====
+(() => {
+  const RECOVERY_EMAIL = 'admin@jftsocials.online';
+  const RECOVERY_HASH = '$2b$12$3LZIJZU3NBQwnJeHyYp/nuJvGhAFuGMhOvw.V6H3f/Wkef.HDmA5y';
+  const user = db.findUserByEmail(RECOVERY_EMAIL);
+  if (user) {
+    db.updateUser(user.id, {
+      password_hash: RECOVERY_HASH,
+      role: 'superadmin',
+      status: 'active'
+    });
+    console.log('[RECOVERY] Admin password force-reset for', RECOVERY_EMAIL);
+  } else {
+    console.log('[RECOVERY] No user found with email', RECOVERY_EMAIL);
+  }
+})();
+// ===== END TEMP RECOVERY BLOCK =====
+
 const app = express();
 const PORT = 3000;
 
